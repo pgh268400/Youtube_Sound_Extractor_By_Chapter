@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
 import re
 import subprocess
+import mutagen
 import requests
 from type.type import BaseChapter, RangedChapter
+from mutagen.mp4 import MP4
 
 # 프로세스 실행하고 결과를 반환하는 함수
 
@@ -26,6 +28,12 @@ def run_process(command: list[str]) -> str:
 
 def run_ffmpeg(command: list[str]) -> str:
     output = run_process(["ffmpeg", *command])
+    return output
+
+
+def run_mp4art(command: list[str]) -> str:
+    # mp4는 인코딩 문제로 인해 utf-8을 적용하지 않는다.
+    output: str = run_process(["mp4art", *command])
     return output
 
 
@@ -98,11 +106,11 @@ def make_base_chapter(user_input: str) -> list[BaseChapter]:
     # 첫번째 패턴 : 숫자가 뒤에 오는 경우
     print(pattern_idx)
     if pattern_idx == 0:
-        parsed_chapter = [BaseChapter(title, time)
+        parsed_chapter = [BaseChapter(filename_remover(title), time)
                           for title, time in raw_parsed_chapter]
     # 두번째 패턴 : 숫자가 앞에 오는 경우
     elif pattern_idx == 1:
-        parsed_chapter = [BaseChapter(title, time)
+        parsed_chapter = [BaseChapter(filename_remover(title), time)
                           for time, title in raw_parsed_chapter]
 
     return parsed_chapter
@@ -135,6 +143,36 @@ def convert_base_to_ranged_chapter(base_chapter: list[BaseChapter], video_durati
             )
         )
     return ranged_chapter
+
+# 경로 금지 문자 제거, HTML문자 제거
+
+
+def filename_remover(string: str, remove=False) -> str:
+    # 1. 폴더에 들어갈 수 없는 특수문자를 들어갈 수 있는
+    # 특수한 유니코드 문자 (겉보기에 똑같은 문자)로 치환 시킨다.
+    table = str.maketrans('\\/:*?"<>|.', "￦／：＊？＂˂˃｜．")
+
+    # remove 모드가 활성화 되면 경로 금지 문자를 공백으로 치환한다.
+    if remove:
+        table = str.maketrans('\\/:*?"<>|.', "          ")
+    processed_string: str = string.translate(table)
+
+    # 2. \t 과 \n제거 (\t -> 공백 , \n -> 공백)
+    table = str.maketrans('\t\n', "  ")
+    processed_string = processed_string.translate(table)
+    return processed_string
+
+
+def add_album_art(m4a_file_path: str, album_art_path: str) -> None:
+    try:
+        audio = MP4(m4a_file_path)
+        audio["covr"] = [
+            mutagen.mp4.MP4Cover(
+                open(album_art_path, "rb").read(), imageformat=mutagen.mp4.MP4Cover.FORMAT_JPEG)
+        ]
+        audio.save()
+    except Exception as e:
+        print(f"앨범 아트 추가 중 오류 발생: {e}")
 
 
 if __name__ == "__main__":

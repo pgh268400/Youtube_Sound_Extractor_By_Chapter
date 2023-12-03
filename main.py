@@ -2,14 +2,15 @@ import glob
 import json
 import os
 from pprint import pprint
+import shutil
 import sys
 import yt_dlp
-from module.module import convert_base_to_ranged_chapter, convert_to_seconds, make_base_chapter, run_ffmpeg, run_process
+from module.module import add_album_art, convert_base_to_ranged_chapter, filename_remover, make_base_chapter, run_ffmpeg
 from yt_dlp import YoutubeDL
-
 from type.type import RangedChapter
 
 
+# run_mp4art(['--add', 'thumbnails\\0.png', "output\\L L L .m4a"])
 r"""
     정규식 1번
     (.+?)[ ]+(?:│|[|])*[ ]*(\d+:\d+:\d+|\d+:\d+)
@@ -33,7 +34,6 @@ r"""
 # 유튜브 영상 주소 입력
 url = input("유튜브 영상 주소를 입력해주세요 : ")
 print("유튜브 영상 정보를 가져오는 중...")
-
 
 # yt-dlp로 영상 정보 가져오기
 ydl = YoutubeDL({"quiet": True})
@@ -61,7 +61,8 @@ if (chapters != None):
     for i, chapter in enumerate(chapters):
         ranged_chapter.append(
             RangedChapter(
-                title=chapter['title'], start_time=chapter['start_time'], end_time=chapter['end_time']
+                # filename_remover 작업
+                title=filename_remover(chapter['title']), start_time=chapter['start_time'], end_time=chapter['end_time']
             ))
     # 변환 후 원래 챕터에 반영
     chapters = ranged_chapter
@@ -82,6 +83,10 @@ else:
 
 # 여기까지 오면 chapters는 확정된 상태 = Not Empty
 print(chapters)
+
+# filename_remover 작업
+title = filename_remover(title)
+
 
 # 최고 화질 + 최고 음질로 영상 다운로드
 # 참고 : https://github.com/yt-dlp/yt-dlp/issues/3398\
@@ -150,8 +155,20 @@ print('썸네일을 적용합니다.')
 # thumbnail_files = os.listdir(thumbnail_folder)
 thumbnail_files = glob.glob(os.path.join(thumbnail_folder, '*.png'))
 
-for i, file in enumerate(thumbnail_files):
+for i, thubnail_file in enumerate(thumbnail_files):
     # 썸네일 적용
-    output = run_process(
-        ["mp4art", "--add", file, os.path.join(output_folder, chapters[i].title + ".m4a")])
+    # output = run_mp4art(
+    #     ["--add", file, os.path.join(output_folder, chapters[i].title + ".m4a")])
+
+    m4a_path = os.path.join(output_folder, chapters[i].title + ".m4a")
+
+    add_album_art(m4a_path, thubnail_file)
+
     print(f'{chapters[i].title}.m4a 썸네일 적용 완료')
+
+# 작업 완료 후 다운로드 받은 영상, 추출한 음원, 썸네일 폴더를 삭제한다.
+os.remove(f'{title}.{ext}')
+os.remove(f'{title}.m4a')
+shutil.rmtree(thumbnail_folder)
+
+print("작업이 완료되었습니다.")
