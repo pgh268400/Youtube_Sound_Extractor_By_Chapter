@@ -1,2 +1,12 @@
 *.mp4
 *.webm
+*.json
+*.m4a
+*.mp4
+thumbnails/
+output/
+*.txt
+*.pyc
+test.py
+*.jpg
+*.png
