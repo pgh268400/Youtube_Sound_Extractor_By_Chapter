@@ -5,7 +5,7 @@ import mutagen
 import requests
 from type.type import BaseChapter, RangedChapter
 from mutagen.mp4 import MP4
-
+from yt_dlp import YoutubeDL
 # 프로세스 실행하고 결과를 반환하는 함수
 
 
@@ -166,13 +166,25 @@ def filename_remover(string: str, remove=False) -> str:
 def add_album_art(m4a_file_path: str, album_art_path: str) -> None:
     try:
         audio = MP4(m4a_file_path)
+        print(audio)
         audio["covr"] = [
             mutagen.mp4.MP4Cover(
                 open(album_art_path, "rb").read(), imageformat=mutagen.mp4.MP4Cover.FORMAT_JPEG)
         ]
         audio.save()
     except Exception as e:
-        print(f"앨범 아트 추가 중 오류 발생: {e}")
+        raise Exception(f"앨범 아트 추가 중 오류 발생: {e}")
+
+
+def get_youtube_info(url: str):
+    # yt-dlp로 영상 정보 가져오기
+    ydl = YoutubeDL({"quiet": True})
+    info = ydl.extract_info(url, download=False)
+    ydl.close()  # with 을 쓰지 않아서 직접 close 해줘야함
+    if not info:
+        print("유튜브 영상 정보를 가져오는데 실패했습니다.")
+        exit()
+    return info
 
 
 if __name__ == "__main__":
