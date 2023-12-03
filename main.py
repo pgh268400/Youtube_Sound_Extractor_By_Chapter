@@ -5,6 +5,7 @@ from pprint import pprint
 import shutil
 import sys
 import yt_dlp
+from module.config import Config
 from module.module import (
     add_album_art,
     convert_base_to_ranged_chapter,
@@ -16,60 +17,13 @@ from module.module import (
 from natsort import natsorted
 from type.type import RangedChapter
 
-
-# run_mp4art(['--add', 'thumbnails\\0.png', "output\\L L L .m4a"])
-r"""
-    정규식 1번
-    (.+?)[ ]+(?:│|[|])*[ ]*(\d+:\d+:\d+|\d+:\d+)
-    01. Durarara!! OP2 │ 0:00
-    02. Assassination classroom S2 OP2 │ 4:44
-    03. Hunter x Hunter (2011) OP │ 8:51
-    04. Noragami Aragoto OP │ 13:01
-    05. Fate/Stay Night Unlimited Blade Works  OP2 │ 17:08
-    => output : title : 01. Durarara!! OP2 , time : 0:00
-
-    정규식 2번 (순서 변경)
-    (\d+:\d+:\d+|\d+:\d+)[ ]+(?:│|[|])*[ ]*(.+)
-    00:00 유우리 - 여름소리
-    03:58 녹황색사회 - 리트머스
-    08:09 요네즈 켄시 - 말과 사슴
-    12:36 후지이 카제 - 상냥함
-    16:39 게스노키와미오토메 - 킬러볼
-    => output : title : 유우리 - 여름소리 , time : 00:00
-"""
-
-# 기본 설정값 불러오기-------------------------------------
-# 썸네일 추출시 +- 전체적으로 몇 초 보정할 지 오프셋값
-total_offset = 0  # 이곳을 수정
-
-# 이 곳 아래 변수를 조정해 특정 순번의 썸네일에만 오프셋을 따로 줄 수도 있음
-custom_offset = {
-    # "1": 4 # 1번 챕터에만 +N초 오프셋을 줌 (total_offset과 합산됨)
-    # 2: -5,
-    # 3: -8,
-    # 4: 7
-}
-
-# 위 변수는 json 파일에서 불러오면 바뀌니
-# 직접 수정하지 말자. (total_offset, custom_offset)
-
-thumbnail_folder = "thumbnails"  # 썸네일 폴더명
-output_folder = "output"  # 최종 결과물 폴더명
+# 설정 파일에서 설정값을 가져온다.
 settings_file_path = "./settings.json"
-
-if os.path.exists(settings_file_path):
-    # 기본 설정 파일 있으면 불러옴
-    with open(settings_file_path, "r", encoding="utf-8") as f:
-        settings = json.load(f)
-    total_offset = settings["total_offset"]
-    custom_offset = settings["custom_offset"]
-else:
-    # 기본 설정 파일 없으면 생성
-    with open(settings_file_path, "w", encoding="utf-8") as f:
-        json.dump(
-            {"total_offset": total_offset, "custom_offset": custom_offset}, f, indent=4
-        )
-# -----------------------------------------------------------
+cfg = Config(settings_file_path)
+thumbnail_folder = cfg.get().thumbnail_folder
+output_folder = cfg.get().output_folder
+total_offset = cfg.get().total_offset
+custom_offset = cfg.get().custom_offset
 
 # 유튜브 영상 주소 입력
 url = input("유튜브 영상 주소를 입력해주세요 : ")
@@ -86,23 +40,9 @@ chapters = info["chapters"]
 print("제목 :", title)
 print("영상 길이 :", duration)
 
-if chapters != None:
-    # 영상에 이미 챕터가 존재하는 경우 RangedChapter 에 맞게 변환한다.
-    print("영상에 이미 챕터가 존재합니다, 작업을 위해 알맞게 변환합니다.")
 
-    ranged_chapter = []
-    for i, chapter in enumerate(chapters):
-        ranged_chapter.append(
-            RangedChapter(
-                # filename_remover 작업
-                title=filename_remover(chapter["title"]),
-                start_time=chapter["start_time"],
-                end_time=chapter["end_time"],
-            )
-        )
-    # 변환 후 원래 챕터에 반영
-    chapters = ranged_chapter
-else:
+# 유저로부터 챕터를 입력받고 파싱
+def parse_chapter_by_user() -> list[RangedChapter]:
     print("챕터를 입력해주세요. 다 입력했으면 Ctrl + Z (Ctrl + D) 를 입력합니다. :")
 
     contents: list[str] = sys.stdin.readlines()
@@ -114,7 +54,33 @@ else:
 
     print("챕터 변환을 수행합니다.")
     ranged_chapter = convert_base_to_ranged_chapter(base_chapter, duration)
-    chapters = ranged_chapter
+    return ranged_chapter
+
+
+# yt-dlp에서 가져온 챕터 내역을 프로그램에 알맞게 변환
+def parse_chapter_by_yt_dlp(chapters) -> list[RangedChapter]:
+    ranged_chapter = []
+    for i, chapter in enumerate(chapters):
+        ranged_chapter.append(
+            RangedChapter(
+                # filename_remover 작업
+                title=filename_remover(chapter["title"]),
+                start_time=chapter["start_time"],
+                end_time=chapter["end_time"],
+            )
+        )
+    return ranged_chapter
+
+
+if chapters != None:
+    # 영상에 이미 챕터가 존재하는 경우 RangedChapter 에 맞게 변환한다.
+    answer = input("영상에 이미 챕터가 존재합니다 영상의 챕터를 사용하시겠습니까 ? (y/n) : ")
+    if answer.lower() == "y":
+        chapters = parse_chapter_by_yt_dlp(chapters)
+    else:
+        chapters = parse_chapter_by_user()
+else:
+    chapters = parse_chapter_by_user()
 
 # 여기까지 오면 chapters는 확정된 상태 = Not Empty
 pprint(chapters)
@@ -123,7 +89,7 @@ pprint(chapters)
 title = filename_remover(title)
 
 # 최고 화질 + 최고 음질로 영상 다운로드
-# 참고 : https://github.com/yt-dlp/yt-dlp/issues/3398\
+# 참고 : https://github.com/yt-dlp/yt-dlp/issues/3398
 # mp4 영상은 최고 용량이 webm 용량 대비 너무 커서 webm을 택했으나
 # mp4는 음원 분리가 바로 되나 webm은 재 인코딩 과정이 필요해 매우 오래 걸림.
 # 따라서 어쩔 수 없이 mp4를 택함.
@@ -137,7 +103,9 @@ with yt_dlp.YoutubeDL(
         # 최고 품질 영상 mp4 & 최고 음질 m4a 로 받으나, 영상의 경우 FHD 이하로 제한한다.
         "format": f"bestvideo[height<=1080][ext={ext}]+bestaudio[ext=m4a]/best[ext={ext}]/best",
         "merge_output_format": ext,
-        "outtmpl": {"default": "%(title)s.%(ext)s"},
+        "outtmpl": {"default": "%(title)s.%(ext)s"},  # 제목.확장자 형식으로 저장
+        "throttledratelimit": 102400,
+        "concurrent_fragment_downloads": 10,  # 동시에 10개의 영상 조각을 다운로드
     }
 ) as ydl:
     ydl.download([url])
@@ -205,7 +173,7 @@ print("썸네일을 적용합니다.")
 # 썸네일 폴더의 모든 파일을 가져온다.
 # thumbnail_files = os.listdir(thumbnail_folder)
 thumbnail_files = glob.glob(os.path.join(thumbnail_folder, "*.png"))
-natsorted(thumbnail_files, key=lambda y: y.lower())
+thumbnail_files = natsorted(thumbnail_files)
 
 for i, chapter in enumerate(chapters):
     m4a_path = os.path.join(output_folder, chapter.title + ".m4a")
@@ -213,8 +181,8 @@ for i, chapter in enumerate(chapters):
     print(f"{chapter.title}.m4a 썸네일 적용 완료")
 
 # 작업 완료 후 다운로드 받은 영상, 추출한 음원, 썸네일 폴더를 삭제한다.
-os.remove(f"{title}.{ext}")
-os.remove(f"{title}.m4a")
+# os.remove(f"{title}.{ext}")
+# os.remove(f"{title}.m4a")
 shutil.rmtree(thumbnail_folder)
 
 print("작업이 완료되었습니다.")
