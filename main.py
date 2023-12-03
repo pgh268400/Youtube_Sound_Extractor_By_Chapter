@@ -13,7 +13,7 @@ from module.module import (
     make_base_chapter,
     run_ffmpeg,
 )
-
+from natsort import natsorted
 from type.type import RangedChapter
 
 
@@ -43,13 +43,20 @@ r"""
 total_offset = 0  # 이곳을 수정
 
 # 이 곳 아래 변수를 조정해 특정 순번의 썸네일에만 오프셋을 따로 줄 수도 있음
-custom_offset = {}
+custom_offset = {
+    # "1": 4 # 1번 챕터에만 +N초 오프셋을 줌 (total_offset과 합산됨)
+    # 2: -5,
+    # 3: -8,
+    # 4: 7
+}
 
-ext = "mp4"  # 수정 금지!
+# 위 변수는 json 파일에서 불러오면 바뀌니
+# 직접 수정하지 말자. (total_offset, custom_offset)
+
 thumbnail_folder = "thumbnails"  # 썸네일 폴더명
 output_folder = "output"  # 최종 결과물 폴더명
-
 settings_file_path = "./settings.json"
+
 if os.path.exists(settings_file_path):
     # 기본 설정 파일 있으면 불러옴
     with open(settings_file_path, "r", encoding="utf-8") as f:
@@ -121,11 +128,14 @@ title = filename_remover(title)
 # mp4는 음원 분리가 바로 되나 webm은 재 인코딩 과정이 필요해 매우 오래 걸림.
 # 따라서 어쩔 수 없이 mp4를 택함.
 
+ext = "mp4"  # 수정 금지!
+
 print("최고 품질로 영상을 다운로드 합니다.")
 
 with yt_dlp.YoutubeDL(
     {
-        "format": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        # 최고 품질 영상 mp4 & 최고 음질 m4a 로 받으나, 영상의 경우 FHD 이하로 제한한다.
+        "format": f"bestvideo[height<=1080][ext={ext}]+bestaudio[ext=m4a]/best[ext={ext}]/best",
         "merge_output_format": ext,
         "outtmpl": {"default": "%(title)s.%(ext)s"},
     }
@@ -195,12 +205,13 @@ print("썸네일을 적용합니다.")
 # 썸네일 폴더의 모든 파일을 가져온다.
 # thumbnail_files = os.listdir(thumbnail_folder)
 thumbnail_files = glob.glob(os.path.join(thumbnail_folder, "*.png"))
+natsorted(thumbnail_files, key=lambda y: y.lower())
 
-for i, thubnail_file in enumerate(thumbnail_files):
-    title = chapters[i].title
-    m4a_path = os.path.join(output_folder, title + ".m4a")
-    add_album_art(m4a_path, thubnail_file)
-    print(f"{title}.m4a 썸네일 적용 완료")
+for i, chapter in enumerate(chapters):
+    m4a_path = os.path.join(output_folder, chapter.title + ".m4a")
+    add_album_art(m4a_path, thumbnail_files[i])
+    print(f"{chapter.title}.m4a 썸네일 적용 완료")
+
 # 작업 완료 후 다운로드 받은 영상, 추출한 음원, 썸네일 폴더를 삭제한다.
 os.remove(f"{title}.{ext}")
 os.remove(f"{title}.m4a")

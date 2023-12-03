@@ -6,6 +6,7 @@ import requests
 from type.type import BaseChapter, RangedChapter
 from mutagen.mp4 import MP4
 from yt_dlp import YoutubeDL
+
 # 프로세스 실행하고 결과를 반환하는 함수
 
 
@@ -17,11 +18,13 @@ def run_process(command: list[str]) -> str:
     # encoding은 기본이 cp949라 문제 없이 저장할려면 utf-8로 설정
     try:
         output: str = subprocess.check_output(
-            command, stderr=subprocess.STDOUT, encoding='utf-8', text=True)
+            command, stderr=subprocess.STDOUT, encoding="utf-8", text=True
+        )
     except:
-        raise Exception('명령어 실행에 실패했습니다.')
+        raise Exception("명령어 실행에 실패했습니다.")
 
     return output
+
 
 # ffmpeg 실행하고 결과를 반환하는 함수 (일종의 run_process의 wrapper 함수)
 
@@ -39,13 +42,13 @@ def run_mp4art(command: list[str]) -> str:
 
 def get_title_from_youtube(url) -> str:
     res = requests.get(url)
-    title = re.search('(?<=<title>).+?(?=</title>)',
-                      res.text, re.DOTALL)
+    title = re.search("(?<=<title>).+?(?=</title>)", res.text, re.DOTALL)
     if title:
-        title = title.group().replace(' - YouTube', '')
+        title = title.group().replace(" - YouTube", "")
     else:
-        raise Exception('Title not found')
+        raise Exception("Title not found")
     return title
+
 
 # 1:30:00, 30:00, 30 와 같은 시간 형식을 초로 변환
 # 1:30:00 => 5400.0
@@ -55,7 +58,7 @@ def get_title_from_youtube(url) -> str:
 
 def convert_to_seconds(formatted_time: str) -> float:
     # 시간 형식에 따라 적절한 포맷을 선택
-    formats = ['%H:%M:%S', '%M:%S', '%S']
+    formats = ["%H:%M:%S", "%M:%S", "%S"]
 
     for fmt in formats:
         try:
@@ -64,9 +67,7 @@ def convert_to_seconds(formatted_time: str) -> float:
 
             # timedelta를 사용하여 초로 변환
             seconds = timedelta(
-                hours=time_obj.hour,
-                minutes=time_obj.minute,
-                seconds=time_obj.second
+                hours=time_obj.hour, minutes=time_obj.minute, seconds=time_obj.second
             ).total_seconds()
             return seconds
         except ValueError:
@@ -75,14 +76,15 @@ def convert_to_seconds(formatted_time: str) -> float:
     # 올바른 형식이 없는 경우 예외 처리
     raise ValueError("올바른 시간 형식이 아닙니다.")
 
+
 # 유저가 입력한 챕터 형식을 파싱해 BaseChapter 객체로 반환
 
 
 def make_base_chapter(user_input: str) -> list[BaseChapter]:
     pattern_lst = [
         # 01. Durarara!! OP2 │ 0:00
-        r'(.+?)[ ]+(?:│|[|])*[ ]*(\d+:\d+:\d+|\d+:\d+)',
-        r'(\d+:\d+:\d+|\d+:\d+)[ ]+(?:│|[|])*[ ]*(.+)'  # 00:00 유우리 - 여름소리
+        r"(.+?)[ ]+(?:│|[|])*[ ]*(\d+:\d+:\d+|\d+:\d+)",
+        r"(\d+:\d+:\d+|\d+:\d+)[ ]+(?:│|[|])*[ ]*(.+)",  # 00:00 유우리 - 여름소리
     ]
 
     success_chapter = False  # 챕터를 정상적으로 파싱했는지 여부
@@ -91,8 +93,7 @@ def make_base_chapter(user_input: str) -> list[BaseChapter]:
     pattern_idx = 0
     for i, pattern in enumerate(pattern_lst):
         pattern_idx = i
-        raw_parsed_chapter: list[tuple[str, str]] = re.findall(
-            pattern, user_input)
+        raw_parsed_chapter: list[tuple[str, str]] = re.findall(pattern, user_input)
 
         if raw_parsed_chapter:
             # print('챕터가 정상적으로 파싱되었습니다.')
@@ -100,20 +101,25 @@ def make_base_chapter(user_input: str) -> list[BaseChapter]:
             break
 
     if not success_chapter:
-        raise Exception('챕터 파싱에 실패했습니다. 챕터 형식을 확인해주세요.')
+        raise Exception("챕터 파싱에 실패했습니다. 챕터 형식을 확인해주세요.")
 
     parsed_chapter: list[BaseChapter] = []
     # 첫번째 패턴 : 숫자가 뒤에 오는 경우
     print(pattern_idx)
     if pattern_idx == 0:
-        parsed_chapter = [BaseChapter(filename_remover(title), time)
-                          for title, time in raw_parsed_chapter]
+        parsed_chapter = [
+            BaseChapter(filename_remover(title), time)
+            for title, time in raw_parsed_chapter
+        ]
     # 두번째 패턴 : 숫자가 앞에 오는 경우
     elif pattern_idx == 1:
-        parsed_chapter = [BaseChapter(filename_remover(title), time)
-                          for time, title in raw_parsed_chapter]
+        parsed_chapter = [
+            BaseChapter(filename_remover(title), time)
+            for time, title in raw_parsed_chapter
+        ]
 
     return parsed_chapter
+
 
 # 베이스 챕터들을 레인지 챕터로 변환해주는 함수.
 # BaseChapter 리스트 객체를 RangedChapter 리스트 객체로 변환한다.
@@ -121,7 +127,9 @@ def make_base_chapter(user_input: str) -> list[BaseChapter]:
 # 영상의 길이 ex) 1:30:00, 30:00, 30
 
 
-def convert_base_to_ranged_chapter(base_chapter: list[BaseChapter], video_duration: str) -> list[RangedChapter]:
+def convert_base_to_ranged_chapter(
+    base_chapter: list[BaseChapter], video_duration: str
+) -> list[RangedChapter]:
     ranged_chapter: list[RangedChapter] = []
     for i, element in enumerate(base_chapter):
         # 마지막 챕터인 경우 끝은 영상 끝까지
@@ -130,7 +138,7 @@ def convert_base_to_ranged_chapter(base_chapter: list[BaseChapter], video_durati
                 RangedChapter(
                     title=element.title,
                     start_time=convert_to_seconds(element.timeline),
-                    end_time=convert_to_seconds(video_duration)
+                    end_time=convert_to_seconds(video_duration),
                 )
             )
             break
@@ -139,10 +147,12 @@ def convert_base_to_ranged_chapter(base_chapter: list[BaseChapter], video_durati
                 title=element.title,
                 start_time=convert_to_seconds(element.timeline),
                 end_time=convert_to_seconds(
-                    base_chapter[i+1].timeline)  # 다음 챕터의 시작 시간
+                    base_chapter[i + 1].timeline
+                ),  # 다음 챕터의 시작 시간
             )
         )
     return ranged_chapter
+
 
 # 경로 금지 문자 제거, HTML문자 제거
 
@@ -158,7 +168,7 @@ def filename_remover(string: str, remove=False) -> str:
     processed_string: str = string.translate(table)
 
     # 2. \t 과 \n제거 (\t -> 공백 , \n -> 공백)
-    table = str.maketrans('\t\n', "  ")
+    table = str.maketrans("\t\n", "  ")
     processed_string = processed_string.translate(table)
     return processed_string
 
@@ -166,10 +176,11 @@ def filename_remover(string: str, remove=False) -> str:
 def add_album_art(m4a_file_path: str, album_art_path: str) -> None:
     try:
         audio = MP4(m4a_file_path)
-        print(audio)
         audio["covr"] = [
             mutagen.mp4.MP4Cover(
-                open(album_art_path, "rb").read(), imageformat=mutagen.mp4.MP4Cover.FORMAT_JPEG)
+                open(album_art_path, "rb").read(),
+                imageformat=mutagen.mp4.MP4Cover.FORMAT_JPEG,
+            )
         ]
         audio.save()
     except Exception as e:
@@ -188,6 +199,6 @@ def get_youtube_info(url: str):
 
 
 if __name__ == "__main__":
-    print(convert_to_seconds('1:30:00'))
-    print(convert_to_seconds('30:00'))
-    print(convert_to_seconds('30'))
+    print(convert_to_seconds("1:30:00"))
+    print(convert_to_seconds("30:00"))
+    print(convert_to_seconds("30"))
