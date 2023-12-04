@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SelectWindow</class>
+ <widget class="QMainWindow" name="SelectWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>383</width>
+    <height>262</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QPushButton" name="btn_auto_convert">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>20</y>
+      <width>341</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>자동 변환</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>70</y>
+      <width>341</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>매뉴얼 변환</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_2">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>130</y>
+      <width>341</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>영상 다운로드</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_3">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>190</y>
+      <width>341</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>썸네일 적용</string>
+    </property>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>btn_auto_convert</sender>
+   <signal>clicked()</signal>
+   <receiver>SelectWindow</receiver>
+   <slot>auto_convert()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>341</x>
+     <y>34</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>374</x>
+     <y>43</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>SelectWindow</receiver>
+   <slot>manual_convert()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>329</x>
+     <y>89</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>379</x>
+     <y>95</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_2</sender>
+   <signal>clicked()</signal>
+   <receiver>SelectWindow</receiver>
+   <slot>download_video()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>313</x>
+     <y>155</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>375</x>
+     <y>156</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_3</sender>
+   <signal>clicked()</signal>
+   <receiver>SelectWindow</receiver>
+   <slot>apply_thumbnail()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>335</x>
+     <y>211</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>374</x>
+     <y>221</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>auto_convert()</slot>
+  <slot>manual_convert()</slot>
+  <slot>download_video()</slot>
+  <slot>apply_thumbnail()</slot>
+ </slots>
+</ui>

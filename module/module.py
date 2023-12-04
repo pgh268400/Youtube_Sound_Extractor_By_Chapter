@@ -105,7 +105,7 @@ def make_base_chapter(user_input: str) -> list[BaseChapter]:
 
     parsed_chapter: list[BaseChapter] = []
     # 첫번째 패턴 : 숫자가 뒤에 오는 경우
-    print(pattern_idx)
+
     if pattern_idx == 0:
         parsed_chapter = [
             BaseChapter(filename_remover(title), time)
