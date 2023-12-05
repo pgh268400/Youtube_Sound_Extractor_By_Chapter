@@ -1,3 +1,4 @@
+import json
 from typing import Final, Optional
 from module.ui_compiler import compile_ui_to_py
 import sys
@@ -5,10 +6,7 @@ from PySide6.QtCore import *
 from PySide6.QtWidgets import *
 import os
 import glob
-import json
-import os
 from pprint import pprint
-import shutil
 import sys
 import yt_dlp
 from module.config import Config
@@ -115,6 +113,8 @@ class InputWindow(QMainWindow, Ui_InputWindow):
         # 쓰레드 변수
         self.worker: Optional[DownloadWorker] = None
 
+        self.progress_bar.hide()
+
     # OK 버튼
     def download(self) -> None:
         global is_chapter_input_finish
@@ -148,6 +148,9 @@ class InputWindow(QMainWindow, Ui_InputWindow):
         self.worker.chapter_enabled.connect(self.chapter_enabled)
         self.worker.failed_download.connect(self.failed_download)
         self.worker.already_exist_chapter.connect(self.already_exist_chapter)
+        self.worker.finished.connect(self.thread_finished_job)
+        self.worker.update_input_box.connect(self.update_input_box)
+        self.worker.update_progress_bar.connect(self.update_progress_bar)
 
         # 쓰레드 작업 시작
         self.worker.start()
@@ -169,6 +172,7 @@ class InputWindow(QMainWindow, Ui_InputWindow):
         global is_chapter_input_finish
         is_chapter_input_finish = False
         self.need_chapter_input = False
+        self.use_already_chapter = None
 
     # Worker Thread 의 챕터 입력 명령 함수
     @Slot()
@@ -198,13 +202,37 @@ class InputWindow(QMainWindow, Ui_InputWindow):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
 
+    # 쓰레드 작업 종료시
+    @Slot()
+    def thread_finished_job(self) -> None:
+        self.btn_ok.setEnabled(True)
+        self.btn_ok.setText("OK")
+        self.progress_bar.hide()
+        self.backup_origin()
+
+    # 챕터 입력 박스 업데이트
+    @Slot(str)
+    def update_input_box(self, chapters: str) -> None:
+        self.textedit_user_input.append(chapters)
+
+    # 프로그레스 바 업데이트
+    @Slot(int)
+    def update_progress_bar(self, value: int) -> None:
+        if not self.progress_bar.isVisible():
+            self.progress_bar.show()
+        self.progress_bar.setValue(value)
+        if value == 100:
+            self.progress_bar.hide()
+
 
 class DownloadWorker(QThread):
     # Custom Signal 생성
     update_log = Signal(str)
+    update_input_box = Signal(str)
     chapter_enabled = Signal()
     failed_download = Signal()
     already_exist_chapter = Signal()
+    update_progress_bar = Signal(int)
 
     def __init__(self, parent: InputWindow) -> None:
         # 부모 생성자 호출
@@ -247,6 +275,31 @@ class DownloadWorker(QThread):
                 )
             )
         return ranged_chapter
+
+    def my_hook(self, d) -> None:
+        if d["status"] == "finished":
+            self.update_log.emit("다운로드가 완료되었습니다.")
+        if d["status"] == "downloading":
+            # d 데이터 파일로 쓰고 프로그램 종료
+            # with open("data.json", "w", encoding="utf-8") as f:
+            #     json.dump(d, f)
+            # sys.exit()
+
+            # self.update_progress_bar.emit(d["_percent_str"])
+            # self.update_log.emit(d["_percent_str"])
+
+            total_bytes = ""
+            if "total_bytes" in d:
+                total_bytes = "total_bytes"
+            elif "total_bytes_estimate" in d:
+                total_bytes = "total_bytes_estimate"
+            else:
+                return
+
+            percentage = round(
+                float(d["downloaded_bytes"]) / float(d[total_bytes]) * 100, 1
+            )
+            self.update_progress_bar.emit(percentage)
 
     def run(self) -> None:
         try:
@@ -299,14 +352,21 @@ class DownloadWorker(QThread):
 
             self.update_log.emit("최고 품질로 영상을 다운로드 합니다.")
 
+            # yt-dlp --limit-rate 3000K -N 10 --fragment-retries 1000 --retry-sleep fragment:linear=1::2 --force-overwrites "https://www.youtube.com/watch?v=UnPyGbP0WhE&t=403s"
+
             with yt_dlp.YoutubeDL(
                 {
                     # 최고 품질 영상 mp4 & 최고 음질 m4a 로 받으나, 영상의 경우 FHD 이하로 제한한다.
                     "format": f"bestvideo[height<=1080][ext={ext}]+bestaudio[ext=m4a]/best[ext={ext}]/best",
                     "merge_output_format": ext,
-                    "outtmpl": {"default": "%(title)s.%(ext)s"},  # 제목.확장자 형식으로 저장
+                    # "outtmpl": {"default": "%(title)s.%(ext)s"},  # 제목.확장자 형식으로 저장
+                    "outtmpl": {"default": f"{title}.{ext}"},
                     "throttledratelimit": 102400,
-                    "concurrent_fragment_downloads": 10,  # 동시에 10개의 영상 조각을 다운로드
+                    "fragment_retries": 1000,
+                    # "overwrites": True,
+                    "concurrent_fragment_downloads": 3,  # 동시에 N개의 영상 조각을 다운로드
+                    "retry_sleep_functions": {"fragment": lambda n: n + 1},
+                    "progress_hooks": [self.my_hook],
                 }
             ) as ydl:
                 ydl.download([url])
@@ -345,7 +405,7 @@ class DownloadWorker(QThread):
                         os.path.join(thumbnail_folder, f"{i}.png"),
                     ]
                 )
-                print(output)
+                self.update_input_box.emit(output)
             self.update_log.emit("썸네일 추출이 완료되었습니다.")
 
             # 다운로드 받은 영상에서 무손실 음원 m4a를 추출한다
@@ -395,8 +455,8 @@ class DownloadWorker(QThread):
             self.update_log.emit("작업이 완료되었습니다.")
 
         except Exception as e:
-            self.update_log.emit("유튜브 영상 정보를 가져오는데 실패했습니다.")
             print(e)
+            self.update_log.emit("작업중 오류가 발생했습니다.")
             self.failed_download.emit()
             return
 

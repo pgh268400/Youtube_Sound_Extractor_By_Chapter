@@ -21,7 +21,7 @@ def run_process(command: list[str]) -> str:
             command, stderr=subprocess.STDOUT, encoding="utf-8", text=True
         )
     except:
-        raise Exception("명령어 실행에 실패했습니다.")
+        raise Exception("명령어 실행에 실패했습니다", command)
 
     return output
 
