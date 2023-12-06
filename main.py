@@ -1,4 +1,4 @@
-import json
+import multiprocessing
 from typing import Final, Optional
 from module.ui_compiler import compile_ui_to_py
 import sys
@@ -20,23 +20,43 @@ from module.module import (
 )
 from natsort import natsorted
 from type.type import RangedChapter
-
+import concurrent.futures
 
 # UI -> PY 컴파일
 # fmt: off
-compile_ui_to_py(os.path.join('ui', 'select.ui'),
-                 os.path.join('compiled_ui', 'select.py'))
-compile_ui_to_py(os.path.join('ui', 'input.ui'),
-                 os.path.join('compiled_ui', 'input.py'))
+ui_path = "./ui"
+compiled_ui_path = "./compiled_ui"
+ui_files = ['select.ui', 'input.ui', 'auto.ui']
+
+for ui_file in ui_files:
+    input_path = os.path.join(ui_path, ui_file)
+    output_path = os.path.join(compiled_ui_path, f'{os.path.splitext(ui_file)[0]}.py')
+    compile_ui_to_py(input_path, output_path)
+
 from compiled_ui.select import Ui_SelectWindow
 from compiled_ui.input import Ui_InputWindow
+from compiled_ui.auto import Ui_AutoWindow
 # fmt: on
 
 # 전역 변수
 TITLE: Final[str] = "Youtube Chapter Converter"
 
+
 # 설정 파일 객체는 싱글톤으로 전역으로 사용한다.
 config = Config("./settings.json")
+
+
+class AutoWindow(QMainWindow, Ui_AutoWindow):
+    def __init__(self) -> None:
+        # 기본 설정 코드
+        super().__init__()
+        self.setupUi(self)
+
+        # 제목 설정
+        self.setWindowTitle(TITLE)
+
+    def edit_log(self, log: str) -> None:
+        self.textedit_log.setText(log)
 
 
 class MainWindow(QMainWindow, Ui_SelectWindow):
@@ -113,6 +133,9 @@ class InputWindow(QMainWindow, Ui_InputWindow):
         # 쓰레드 변수
         self.worker: Optional[DownloadWorker] = None
 
+        # 로그 창 변수
+        self.log_window: Optional[AutoWindow] = None
+
         self.progress_bar.hide()
 
     # OK 버튼
@@ -128,6 +151,8 @@ class InputWindow(QMainWindow, Ui_InputWindow):
                 return
             else:
                 is_chapter_input_finish = True
+                # C-OK 버튼 비활성화
+                self.btn_ok.setEnabled(False)
             return
 
         # 유저가 입력한 URL
@@ -278,7 +303,7 @@ class DownloadWorker(QThread):
 
     def my_hook(self, d) -> None:
         if d["status"] == "finished":
-            self.update_log.emit("다운로드가 완료되었습니다.")
+            self.update_log.emit("다운로드가 완료되었습니다. 병합 진행중...")
         if d["status"] == "downloading":
             # d 데이터 파일로 쓰고 프로그램 종료
             # with open("data.json", "w", encoding="utf-8") as f:
@@ -301,23 +326,68 @@ class DownloadWorker(QThread):
             )
             self.update_progress_bar.emit(percentage)
 
+    # ffmpeg로 챕터 시작 시간의 썸네일 추출
+    def thumbnail_extractor(self, data: tuple[int, RangedChapter]):
+        i, chapter = data
+        copy_offset = self.total_offset
+        # custom offset이 적용된 경우 해당 순번의 썸네일에만 오프셋을 따로 줌 (total_offset과 합산됨)
+        if i + 1 in self.custom_offset:
+            copy_offset = self.total_offset + self.custom_offset[i + 1]
+        # 썸네일 추출
+        time = str(int(chapter.start_time) + copy_offset)
+        output = run_ffmpeg(
+            [
+                # -y 옵션 : 덮어쓰기
+                "-y",
+                "-ss",
+                time,
+                "-i",
+                f"{self.title}.{self.ext}",
+                "-vframes",
+                "1",
+                os.path.join(self.thumbnail_folder, f"{i}.png"),
+            ]
+        )
+        return output
+
+    # 챕터 별로 음원 자르기
+    def cut_audio(self, chapters: RangedChapter) -> tuple[str, str]:
+        # 챕터별 음원 추출
+        output = run_ffmpeg(
+            [
+                "-y",
+                "-i",
+                f"{self.title}.m4a",
+                "-ss",
+                str(int(chapters.start_time)),
+                "-to",
+                str(int(chapters.end_time)),
+                "-c",
+                "copy",
+                os.path.join(self.output_folder, f"{chapters.title}.m4a"),
+            ]
+        )
+        return (chapters.title, output)
+
     def run(self) -> None:
         try:
             self.update_log.emit("유튜브 영상 정보를 가져오는 중...")
+
             # InputWindow 에서 넘겨 받은 본인(self) 변수를 이용해 UI 요소들에 접근한다.
             # 참고로 이 방식으론 접근해서 읽기만 해야지 쓰기는 하면 안된다.
             # 쓰고 싶으면 Signal & Slot 을 이용해 Thread Safe 하게 접근해야 한다.
 
-            url = self.input_window.line_edit_youtube_url.text()
-            info = get_youtube_info(url)
+            # 생성자 대신에 run 함수 내부에서 멤버 변수들을 초기화 한다.
+            self.url = self.input_window.line_edit_youtube_url.text()
+            self.info = get_youtube_info(self.url)
 
-            title: str = info["title"]
-            duration: str = info["duration_string"]
-            chapters = info["chapters"]
+            self.title: str = self.info["title"]
+            self.duration: str = self.info["duration_string"]
+            self.chapters = self.info["chapters"]
 
-            self.update_log.emit(f"{title} | {duration}")
+            self.update_log.emit(f"{self.title} | {self.duration}")
 
-            if chapters != None:
+            if self.chapters != None:
                 # 영상에 이미 챕터가 존재하는 경우 RangedChapter 에 맞게 변환한다.
                 # 메인 쓰레드에게 메세지 입력을 요청하기 위해 시그널을 보내고 대기한다.
                 self.already_exist_chapter.emit()
@@ -330,17 +400,17 @@ class DownloadWorker(QThread):
                     self.input_window.use_already_chapter
                     == QMessageBox.StandardButton.Yes
                 ):
-                    chapters = self.parse_chapter_by_yt_dlp(chapters)
+                    self.chapters = self.parse_chapter_by_yt_dlp(self.chapters)
                 else:
-                    chapters = self.parse_chapter_by_user(duration)
+                    self.chapters = self.parse_chapter_by_user(self.duration)
             else:
-                chapters = self.parse_chapter_by_user(duration)
+                self.chapters = self.parse_chapter_by_user(self.duration)
 
             # 여기까지 오면 chapters는 확정된 상태 = Not Empty
-            pprint(chapters)
+            pprint(self.chapters)
 
             # filename_remover 작업
-            title = filename_remover(title)
+            self.title = filename_remover(self.title)
 
             # 최고 화질 + 최고 음질로 영상 다운로드
             # 참고 : https://github.com/yt-dlp/yt-dlp/issues/3398
@@ -348,7 +418,7 @@ class DownloadWorker(QThread):
             # mp4는 음원 분리가 바로 되나 webm은 재 인코딩 과정이 필요해 매우 오래 걸림.
             # 따라서 어쩔 수 없이 mp4를 택함.
 
-            ext = "mp4"  # 수정 금지!
+            self.ext = "mp4"  # 수정 금지!
 
             self.update_log.emit("최고 품질로 영상을 다운로드 합니다.")
 
@@ -357,10 +427,10 @@ class DownloadWorker(QThread):
             with yt_dlp.YoutubeDL(
                 {
                     # 최고 품질 영상 mp4 & 최고 음질 m4a 로 받으나, 영상의 경우 FHD 이하로 제한한다.
-                    "format": f"bestvideo[height<=1080][ext={ext}]+bestaudio[ext=m4a]/best[ext={ext}]/best",
-                    "merge_output_format": ext,
+                    "format": f"bestvideo[height<=1080][ext={self.ext}]+bestaudio[ext=m4a]/best[ext={self.ext}]/best",
+                    "merge_output_format": self.ext,
                     # "outtmpl": {"default": "%(title)s.%(ext)s"},  # 제목.확장자 형식으로 저장
-                    "outtmpl": {"default": f"{title}.{ext}"},
+                    "outtmpl": {"default": f"{self.title}.{self.ext}"},
                     "throttledratelimit": 102400,
                     "fragment_retries": 1000,
                     # "overwrites": True,
@@ -369,81 +439,84 @@ class DownloadWorker(QThread):
                     "progress_hooks": [self.my_hook],
                 }
             ) as ydl:
-                ydl.download([url])
+                ydl.download([self.url])
             self.update_log.emit("다운로드가 완료되었습니다.")
 
             # 각 챕터 시작 시간의 썸네일을 ffmpeg를 이용해 추출한다.
             self.update_log.emit("썸네일을 추출합니다.")
 
             # 설정 파일에서 설정값을 가져옴
-            thumbnail_folder = config.get().thumbnail_folder
-            output_folder = config.get().output_folder
-            custom_offset = config.get().custom_offset
-            total_offset = config.get().total_offset
+            self.thumbnail_folder = config.get().thumbnail_folder
+            self.output_folder = config.get().output_folder
+            self.custom_offset = config.get().custom_offset
+            self.total_offset = config.get().total_offset
 
             # 썸네일 저장용 폴더 생성
-            os.makedirs(thumbnail_folder, exist_ok=True)
+            os.makedirs(self.thumbnail_folder, exist_ok=True)
 
-            # ffmpeg로 챕터 시작 시간의 썸네일 추출
-            for i, chapter in enumerate(chapters):
-                copy_offset = total_offset
-                # custom offset이 적용된 경우 해당 순번의 썸네일에만 오프셋을 따로 줌 (total_offset과 합산됨)
-                if i + 1 in custom_offset:
-                    copy_offset = total_offset + custom_offset[i + 1]
-                # 썸네일 추출
-                time = str(int(chapter.start_time) + copy_offset)
-                output = run_ffmpeg(
-                    [
-                        # -y 옵션 : 덮어쓰기
-                        "-y",
-                        "-ss",
-                        time,
-                        "-i",
-                        f"{title}.{ext}",
-                        "-vframes",
-                        "1",
-                        os.path.join(thumbnail_folder, f"{i}.png"),
-                    ]
-                )
-                self.update_input_box.emit(output)
+            # 병렬 처리에 필요한 데이터 생성
+            parallel_data: list[tuple[int, RangedChapter]] = []
+            for i, chapter in enumerate(self.chapters):
+                parallel_data.append((i, chapter))
+
+            # 동시에 실행될 최대 프로세스 수를 정의합니다.
+            # 이 숫자를 조절하여 동시에 실행되는 프로세스 수를 제한할 수 있습니다.
+            # 여기선 cpu 코어 수 * 2 로 설정
+            max_workers = multiprocessing.cpu_count() * 2
+
+            # multiprocessing.Pool을 사용하여 병렬 처리를 수행합니다.
+            with concurrent.futures.ThreadPoolExecutor(max_workers) as executor:
+                # map 메서드를 사용하여 함수를 병렬로 실행합니다.
+                # your_function이 your_data_list의 각 아이템에 대해 병렬로 실행됩니다.
+                results = executor.map(self.thumbnail_extractor, parallel_data)
+
+            # 작업 결과를 확인합니다.
+            for result in results:
+                print(result)
+
+            # self.update_input_box.emit(results)
+
             self.update_log.emit("썸네일 추출이 완료되었습니다.")
 
             # 다운로드 받은 영상에서 무손실 음원 m4a를 추출한다
             self.update_log.emit("음원을 추출합니다.")
             output = run_ffmpeg(
-                ["-y", "-i", f"{title}.{ext}", "-vn", "-acodec", "copy", f"{title}.m4a"]
+                [
+                    "-y",
+                    "-i",
+                    f"{self.title}.{self.ext}",
+                    "-vn",
+                    "-acodec",
+                    "copy",
+                    f"{self.title}.m4a",
+                ]
             )
 
             # 추출한 음원을 챕터별로 자른다.
             self.update_log.emit("음원을 챕터별로 자릅니다.")
-            os.makedirs(output_folder, exist_ok=True)
-            for i, chapter in enumerate(chapters):
-                # 챕터별 음원 추출
-                output = run_ffmpeg(
-                    [
-                        "-y",
-                        "-i",
-                        f"{title}.m4a",
-                        "-ss",
-                        str(int(chapter.start_time)),
-                        "-to",
-                        str(int(chapter.end_time)),
-                        "-c",
-                        "copy",
-                        os.path.join(output_folder, f"{chapter.title}.m4a"),
-                    ]
-                )
-                self.update_log.emit(f"{chapter.title}.m4a 추출 완료")
+            os.makedirs(self.output_folder, exist_ok=True)
+
+            # 병렬 처리
+            with concurrent.futures.ThreadPoolExecutor(max_workers) as executor:
+                # map 메서드를 사용하여 함수를 병렬로 실행합니다.
+                # your_function이 your_data_list의 각 아이템에 대해 병렬로 실행됩니다.
+                results = executor.map(self.cut_audio, self.chapters)
+
+            # 작업 결과를 확인합니다.
+            for result in results:
+                self.update_log.emit(f"{result[0]}.m4a 추출 완료")
+                print(result)
+
             # 챕터별로 자른 음원에 썸네일을 붙인다.
             self.update_log.emit("썸네일을 적용합니다.")
 
             # 썸네일 폴더의 모든 파일을 가져온다.
             # thumbnail_files = os.listdir(thumbnail_folder)
-            thumbnail_files = glob.glob(os.path.join(thumbnail_folder, "*.png"))
+            thumbnail_files = glob.glob(os.path.join(self.thumbnail_folder, "*.png"))
             thumbnail_files = natsorted(thumbnail_files)
 
-            for i, chapter in enumerate(chapters):
-                m4a_path = os.path.join(output_folder, chapter.title + ".m4a")
+            for i, chapter in enumerate(self.chapters):
+                m4a_path = os.path.join(self.output_folder, chapter.title + ".m4a")
                 add_album_art(m4a_path, thumbnail_files[i])
                 self.update_log.emit(f"{chapter.title}.m4a 썸네일 적용 완료")
 
@@ -463,6 +536,8 @@ class DownloadWorker(QThread):
 
 # 메인 윈도우 실행
 app = QApplication(sys.argv)
+app.setStyleSheet(open("theme.css").read())
+
 window = MainWindow()
 window.show()
 sys.exit(app.exec())
