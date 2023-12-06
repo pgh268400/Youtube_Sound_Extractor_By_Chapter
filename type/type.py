@@ -20,3 +20,4 @@ class ConfigResult:
     custom_offset: dict
     thumbnail_folder: str
     output_folder: str
+    download_folder: str

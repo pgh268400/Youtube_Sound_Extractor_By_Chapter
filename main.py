@@ -111,10 +111,6 @@ class MainWindow(QMainWindow, Ui_SelectWindow):
 # PySide6은 Signal, PyQT5는 pyqtSignal로 선언
 
 
-# 챕터 입력이 완료되었는지 InputWindow & Worker 쓰레드가 공유하는 전역 변수
-is_chapter_input_finish: bool = False
-
-
 class InputWindow(QMainWindow, Ui_InputWindow):
     def __init__(self) -> None:
         # 기본 설정 코드
@@ -148,8 +144,6 @@ class InputWindow(QMainWindow, Ui_InputWindow):
 
     # OK 버튼
     def download(self) -> None:
-        global is_chapter_input_finish
-
         # 챕터 입력을 해야 하는 상황인 경우
         if self.need_chapter_input:
             # 유저가 입력한 챕터가 비어있지 않았는지 확인하고 다시 Worker 쓰레드를 깨운다. (전역 변수를 활용해서)
@@ -158,7 +152,8 @@ class InputWindow(QMainWindow, Ui_InputWindow):
                 QMessageBox.information(self, "알림", "챕터를 입력해주세요.")
                 return
             else:
-                is_chapter_input_finish = True
+                # 입력 다 받았으니 쓰레드 깨우기
+                self.worker.resume()
                 # C-OK 버튼 비활성화
                 self.btn_ok.setEnabled(False)
             return
@@ -203,8 +198,6 @@ class InputWindow(QMainWindow, Ui_InputWindow):
 
     # 원상 복귀 함수
     def backup_origin(self) -> None:
-        global is_chapter_input_finish
-        is_chapter_input_finish = False
         self.need_chapter_input = False
         self.use_already_chapter = None
 
@@ -235,6 +228,8 @@ class InputWindow(QMainWindow, Ui_InputWindow):
             "영상에 이미 챕터가 존재합니다 영상의 챕터를 사용하시겠습니까 ?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
+        # 입력 받고 나서 쓰레드를 깨운다.
+        self.worker.resume()
 
     # 쓰레드 작업 종료시
     @Slot()
@@ -286,8 +281,21 @@ class DownloadWorker(QThread):
         # 부모 생성자 호출
         super().__init__()
 
-        # 유저가 입력한 URL (Read Only)
+        # 유저가 입력한 윈도우 Class 객체 (Read Only)
         self.input_window = parent
+
+        # 쓰레드 잠들기 여부
+        self.is_sleep = False
+
+    # 쓰레드 잠드는 함수 (이 함수 사용시 외부 쓰레드에서 깨워야함.)
+    def pause(self) -> None:
+        self.is_sleep = True
+        while self.is_sleep:
+            pass
+
+    # 쓰레드 깨우는 함수 (외부 쓰레드에서 깨울 시 이 함수 호출)
+    def resume(self) -> None:
+        self.is_sleep = False
 
     # 유저로부터 챕터를 입력받고 파싱
     def parse_chapter_by_user(self, duration) -> list[RangedChapter]:
@@ -295,8 +303,9 @@ class DownloadWorker(QThread):
         self.chapter_enabled.emit()  # 챕터 박스 입력 명령을 메인 윈도우에 전달
 
         # 챕터를 입력할 때까지 Worker 쓰레드는 대기 (메인 쓰레드의 동작 대기)
-        while not is_chapter_input_finish:
-            pass
+        # while not is_chapter_input_finish:
+        #     pass
+        self.pause()
 
         # 챕터 입력이 완료되면 작업 시작
         self.update_label.emit("챕터 생성 진행 중...")
@@ -416,8 +425,10 @@ class DownloadWorker(QThread):
                 self.already_exist_chapter.emit()
 
                 # 메인 쓰레드가 사용자의 선택을 기다리는 동안 Worker 쓰레드는 대기한다.
-                while not self.input_window.use_already_chapter:
-                    pass
+                # while not self.input_window.use_already_chapter:
+                #     pass
+                # 입력이 끝나면 메인 쓰레드에서 알아서 깨워준다.
+                self.pause()
 
                 if (
                     self.input_window.use_already_chapter
@@ -473,6 +484,7 @@ class DownloadWorker(QThread):
             self.output_folder = config.get().output_folder
             self.custom_offset = config.get().custom_offset
             self.total_offset = config.get().total_offset
+            self.download_folder = config.get().download_folder
 
             # 썸네일 저장용 폴더 생성
             os.makedirs(self.thumbnail_folder, exist_ok=True)
@@ -496,6 +508,14 @@ class DownloadWorker(QThread):
 
             # 파이썬의 with은 scope를 생성하지 않는다고 함.
             # with문을 벗어나서도 with안에 있는 results 변수를 사용할 수 있나봄 -.-
+            # 더불어 if, for , while 도 스코프를 생성하지 않는다고함.
+            # https://stackoverflow.com/questions/45100271/scope-of-variable-within-with-statement
+            # 파이썬은 지역변수 범위는 함수 안에서 결정되는듯 하다.
+            # https://i-never-stop-study.tistory.com/14
+            # 파이썬의 유효범위(scope)는 함수를 통해서 생성됩니다.
+            # https://justmakeyourself.tistory.com/entry/python-scope
+            # 지금까지 잘못 알고 있었구만;;
+
             # 작업 결과를 확인합니다.
             for result in results:
                 self.update_label.emit(f"{result[0]} 썸네일 추출 완료")

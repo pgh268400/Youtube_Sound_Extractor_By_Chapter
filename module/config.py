@@ -68,4 +68,5 @@ class Config:
             output_folder=self.output_folder,
             total_offset=self.total_offset,
             custom_offset=self.custom_offset,
+            download_folder=self.download_folder,
         )

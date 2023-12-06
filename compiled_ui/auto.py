@@ -28,6 +28,7 @@ class Ui_AutoWindow(object):
         self.textedit_log = QTextEdit(self.centralwidget)
         self.textedit_log.setObjectName(u"textedit_log")
         self.textedit_log.setGeometry(QRect(20, 20, 481, 361))
+        self.textedit_log.setReadOnly(True)
         AutoWindow.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(AutoWindow)
