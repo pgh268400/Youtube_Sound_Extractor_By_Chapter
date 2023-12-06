@@ -374,7 +374,7 @@ class DownloadWorker(QThread):
                 "-ss",
                 time,
                 "-i",
-                f"{self.title}.{self.ext}",
+                self.video_full_path,
                 "-vframes",
                 "1",
                 os.path.join(self.thumbnail_folder, f"{i}.png"),
@@ -389,7 +389,7 @@ class DownloadWorker(QThread):
             [
                 "-y",
                 "-i",
-                f"{self.title}.m4a",
+                self.audio_full_path,
                 "-ss",
                 str(int(chapters.start_time)),
                 "-to",
@@ -413,9 +413,29 @@ class DownloadWorker(QThread):
             self.url = self.input_window.line_edit_youtube_url.text()
             self.info = get_youtube_info(self.url)
 
-            self.title: str = self.info["title"]
+            # filename_remover 작업
+            self.title: str = filename_remover(self.info["title"])
             self.duration: str = self.info["duration_string"]
             self.chapters = self.info["chapters"]
+
+            # 설정 파일에서 설정값을 가져옴
+            self.thumbnail_folder = config.get().thumbnail_folder
+            self.output_folder = config.get().output_folder
+            self.custom_offset = config.get().custom_offset
+            self.total_offset = config.get().total_offset
+            self.download_folder = config.get().download_folder
+
+            self.ext = "mp4"  # 수정 금지!
+
+            # 비디오 파일 완전 경로
+            self.video_full_path = os.path.join(
+                self.download_folder, f"{self.title}.{self.ext}"
+            )
+
+            # 음성 파일 완전 경로
+            self.audio_full_path = os.path.join(
+                self.download_folder, f"{self.title}.m4a"
+            )
 
             self.update_label.emit(f"{self.title} | {self.duration}")
 
@@ -425,8 +445,6 @@ class DownloadWorker(QThread):
                 self.already_exist_chapter.emit()
 
                 # 메인 쓰레드가 사용자의 선택을 기다리는 동안 Worker 쓰레드는 대기한다.
-                # while not self.input_window.use_already_chapter:
-                #     pass
                 # 입력이 끝나면 메인 쓰레드에서 알아서 깨워준다.
                 self.pause()
 
@@ -443,16 +461,11 @@ class DownloadWorker(QThread):
             # 여기까지 오면 chapters는 확정된 상태 = Not Empty
             pprint(self.chapters)
 
-            # filename_remover 작업
-            self.title = filename_remover(self.title)
-
             # 최고 화질 + 최고 음질로 영상 다운로드
             # 참고 : https://github.com/yt-dlp/yt-dlp/issues/3398
             # mp4 영상은 최고 용량이 webm 용량 대비 너무 커서 webm을 택했으나
             # mp4는 음원 분리가 바로 되나 webm은 재 인코딩 과정이 필요해 매우 오래 걸림.
             # 따라서 어쩔 수 없이 mp4를 택함.
-
-            self.ext = "mp4"  # 수정 금지!
 
             self.update_label.emit("최고 품질로 영상을 다운로드 합니다.")
 
@@ -464,7 +477,7 @@ class DownloadWorker(QThread):
                     "format": f"bestvideo[height<=1080][ext={self.ext}]+bestaudio[ext=m4a]/best[ext={self.ext}]/best",
                     "merge_output_format": self.ext,
                     # "outtmpl": {"default": "%(title)s.%(ext)s"},  # 제목.확장자 형식으로 저장
-                    "outtmpl": {"default": f"{self.title}.{self.ext}"},
+                    "outtmpl": {"default": self.video_full_path},
                     "throttledratelimit": 102400,
                     "fragment_retries": 1000,
                     # "overwrites": True,
@@ -478,13 +491,6 @@ class DownloadWorker(QThread):
 
             # 각 챕터 시작 시간의 썸네일을 ffmpeg를 이용해 추출한다.
             self.update_label.emit("썸네일을 추출합니다.")
-
-            # 설정 파일에서 설정값을 가져옴
-            self.thumbnail_folder = config.get().thumbnail_folder
-            self.output_folder = config.get().output_folder
-            self.custom_offset = config.get().custom_offset
-            self.total_offset = config.get().total_offset
-            self.download_folder = config.get().download_folder
 
             # 썸네일 저장용 폴더 생성
             os.makedirs(self.thumbnail_folder, exist_ok=True)
@@ -506,21 +512,23 @@ class DownloadWorker(QThread):
                 # your_function이 your_data_list의 각 아이템에 대해 병렬로 실행됩니다.
                 results = executor.map(self.thumbnail_extractor, parallel_data)
 
-            # 파이썬의 with은 scope를 생성하지 않는다고 함.
-            # with문을 벗어나서도 with안에 있는 results 변수를 사용할 수 있나봄 -.-
-            # 더불어 if, for , while 도 스코프를 생성하지 않는다고함.
-            # https://stackoverflow.com/questions/45100271/scope-of-variable-within-with-statement
-            # 파이썬은 지역변수 범위는 함수 안에서 결정되는듯 하다.
-            # https://i-never-stop-study.tistory.com/14
-            # 파이썬의 유효범위(scope)는 함수를 통해서 생성됩니다.
-            # https://justmakeyourself.tistory.com/entry/python-scope
-            # 지금까지 잘못 알고 있었구만;;
+                # 파이썬의 with은 scope를 생성하지 않는다고 함.
+                # with문을 벗어나서도 with안에 있는 results 변수를 사용할 수 있나봄 -.-
+                # 더불어 if, for , while 도 스코프를 생성하지 않는다고함.
+                # https://stackoverflow.com/questions/45100271/scope-of-variable-within-with-statement
+                # 파이썬은 지역변수 범위는 함수 안에서 결정되는듯 하다.
+                # https://i-never-stop-study.tistory.com/14
+                # 파이썬의 유효범위(scope)는 함수를 통해서 생성됩니다.
+                # https://justmakeyourself.tistory.com/entry/python-scope
+                # 지금까지 잘못 알고 있었구만;;
 
-            # 작업 결과를 확인합니다.
-            for result in results:
-                self.update_label.emit(f"{result[0]} 썸네일 추출 완료")
-                self.update_log.emit(result[1])
-                print(result)
+                # 일단 아래 코드는 스코프 문제가 아니여도 with 밖으로 빼면 안되는듯.
+                # 그러면 executor가 close 되서 실시간으로 결과를 받을 수 없나봄.
+                # 작업 결과를 확인합니다.
+                for result in results:
+                    self.update_label.emit(f"{result[0]} 썸네일 추출 완료")
+                    self.update_log.emit(result[1])
+
 
             # self.update_input_box.emit(results)
 
@@ -532,11 +540,11 @@ class DownloadWorker(QThread):
                 [
                     "-y",
                     "-i",
-                    f"{self.title}.{self.ext}",
+                    self.video_full_path,
                     "-vn",
                     "-acodec",
                     "copy",
-                    f"{self.title}.m4a",
+                    self.audio_full_path,
                 ]
             )
 
@@ -550,11 +558,11 @@ class DownloadWorker(QThread):
                 # your_function이 your_data_list의 각 아이템에 대해 병렬로 실행됩니다.
                 results = executor.map(self.cut_audio, self.chapters)
 
-            # 작업 결과를 확인합니다.
-            for result in results:
-                self.update_label.emit(f"{result[0]}.m4a 추출 완료")
-                self.update_log.emit(result[1])
-                print(result)
+                # 작업 결과를 확인합니다.
+                for result in results:
+                    self.update_label.emit(f"{result[0]}.m4a 추출 완료")
+                    self.update_log.emit(result[1])
+                    print(result)
 
             # 챕터별로 자른 음원에 썸네일을 붙인다.
             self.update_label.emit("썸네일을 적용합니다.")
@@ -585,7 +593,7 @@ class DownloadWorker(QThread):
 
 # 메인 윈도우 실행
 app = QApplication(sys.argv)
-app.setStyleSheet(open("theme.css").read())
+app.setStyleSheet(open("theme.css", encoding="utf-8").read())
 
 window = MainWindow()
 window.show()
