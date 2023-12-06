@@ -74,7 +74,6 @@ class Ui_InputWindow(object):
 
         self.retranslateUi(InputWindow)
         self.btn_ok.clicked.connect(InputWindow.download)
-        self.line_edit_youtube_url.returnPressed.connect(InputWindow.download)
 
         QMetaObject.connectSlotsByName(InputWindow)
     # setupUi

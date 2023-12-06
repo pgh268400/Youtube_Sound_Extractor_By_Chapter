@@ -136,7 +136,15 @@ class InputWindow(QMainWindow, Ui_InputWindow):
         # 로그 창 변수
         self.log_window: Optional[AutoWindow] = None
 
+        # Youtube URL 텍스트 창에서 엔터 입력시 OK 버튼 누르는 이벤트
+        self.line_edit_youtube_url.returnPressed.connect(self.enter_pressed)
+
         self.progress_bar.hide()
+
+    def enter_pressed(self) -> None:
+        # 버튼이 활성화 되어 있는 경우에만 엔터로 버튼 클릭을 허용
+        if self.btn_ok.isEnabled():
+            self.download()
 
     # OK 버튼
     def download(self) -> None:
@@ -169,13 +177,14 @@ class InputWindow(QMainWindow, Ui_InputWindow):
         self.worker = DownloadWorker(self)
 
         # 쓰레드 시그널과 슬롯 연결
-        self.worker.update_log.connect(self.update_log)
+        self.worker.update_label.connect(self.update_label)
         self.worker.chapter_enabled.connect(self.chapter_enabled)
         self.worker.failed_download.connect(self.failed_download)
         self.worker.already_exist_chapter.connect(self.already_exist_chapter)
         self.worker.finished.connect(self.thread_finished_job)
         self.worker.update_input_box.connect(self.update_input_box)
         self.worker.update_progress_bar.connect(self.update_progress_bar)
+        self.worker.update_log.connect(self.update_log)
 
         # 쓰레드 작업 시작
         self.worker.start()
@@ -208,7 +217,7 @@ class InputWindow(QMainWindow, Ui_InputWindow):
         self.need_chapter_input = True
 
     @Slot(str)
-    def update_log(self, log: str) -> None:
+    def update_label(self, log: str) -> None:
         self.label_status.setText(f"Status : {log}")
 
     # 다운로드 실패시
@@ -234,6 +243,8 @@ class InputWindow(QMainWindow, Ui_InputWindow):
         self.btn_ok.setText("OK")
         self.progress_bar.hide()
         self.backup_origin()
+        if self.log_window:
+            self.log_window.hide()
 
     # 챕터 입력 박스 업데이트
     @Slot(str)
@@ -249,15 +260,27 @@ class InputWindow(QMainWindow, Ui_InputWindow):
         if value == 100:
             self.progress_bar.hide()
 
+    # 로그 업데이트 - INPUT Window에서 Log Window를 컨트롤한다.
+    # UI 업데이트 관련 로직은 전부 메인 쓰레드에서 처리하도록 한다.
+    @Slot(str)
+    def update_log(self, log: str) -> None:
+        if not self.log_window or not self.log_window.isVisible():
+            self.log_window = AutoWindow()
+            self.log_window.show()
+        else:
+            self.log_window.activateWindow()
+        self.log_window.textedit_log.append(log)
+
 
 class DownloadWorker(QThread):
     # Custom Signal 생성
-    update_log = Signal(str)
-    update_input_box = Signal(str)
-    chapter_enabled = Signal()
-    failed_download = Signal()
-    already_exist_chapter = Signal()
-    update_progress_bar = Signal(int)
+    update_label = Signal(str)  # 오른쪽 아래 Status Label 업데이트
+    update_log = Signal(str)  # 로그 창 업데이트 (로그 창 안열려 있으면 자동으로 열리고 로그 출력됨)
+    update_input_box = Signal(str)  # 챕터 입력 박스 업데이트
+    chapter_enabled = Signal()  # 챕터 입력 상황이 됨
+    failed_download = Signal()  # 다운로드 실패시
+    already_exist_chapter = Signal()  # 영상에 이미 챕터가 존재하는 경우 유저 입력 메세지 박스 요청
+    update_progress_bar = Signal(int)  # 프로그레스 바 업데이트
 
     def __init__(self, parent: InputWindow) -> None:
         # 부모 생성자 호출
@@ -268,7 +291,7 @@ class DownloadWorker(QThread):
 
     # 유저로부터 챕터를 입력받고 파싱
     def parse_chapter_by_user(self, duration) -> list[RangedChapter]:
-        self.update_log.emit("챕터를 위 박스에 입력해주세요. 다 입력했으면 C-OK 버튼을 누릅니다.")
+        self.update_label.emit("챕터를 위 박스에 입력해주세요. 다 입력했으면 C-OK 버튼을 누릅니다.")
         self.chapter_enabled.emit()  # 챕터 박스 입력 명령을 메인 윈도우에 전달
 
         # 챕터를 입력할 때까지 Worker 쓰레드는 대기 (메인 쓰레드의 동작 대기)
@@ -276,14 +299,14 @@ class DownloadWorker(QThread):
             pass
 
         # 챕터 입력이 완료되면 작업 시작
-        self.update_log.emit("챕터 생성 진행 중...")
+        self.update_label.emit("챕터 생성 진행 중...")
 
         input_chapters: str = self.input_window.textedit_user_input.toPlainText()
         base_chapter = make_base_chapter(input_chapters)
 
         pprint(base_chapter)
 
-        self.update_log.emit("챕터 변환을 수행합니다.")
+        self.update_label.emit("챕터 변환을 수행합니다.")
         ranged_chapter = convert_base_to_ranged_chapter(base_chapter, duration)
         return ranged_chapter
 
@@ -303,7 +326,7 @@ class DownloadWorker(QThread):
 
     def my_hook(self, d) -> None:
         if d["status"] == "finished":
-            self.update_log.emit("다운로드가 완료되었습니다. 병합 진행중...")
+            self.update_label.emit("다운로드가 완료되었습니다. 병합 진행중...")
         if d["status"] == "downloading":
             # d 데이터 파일로 쓰고 프로그램 종료
             # with open("data.json", "w", encoding="utf-8") as f:
@@ -348,7 +371,7 @@ class DownloadWorker(QThread):
                 os.path.join(self.thumbnail_folder, f"{i}.png"),
             ]
         )
-        return output
+        return self.title, output
 
     # 챕터 별로 음원 자르기
     def cut_audio(self, chapters: RangedChapter) -> tuple[str, str]:
@@ -371,7 +394,7 @@ class DownloadWorker(QThread):
 
     def run(self) -> None:
         try:
-            self.update_log.emit("유튜브 영상 정보를 가져오는 중...")
+            self.update_label.emit("유튜브 영상 정보를 가져오는 중...")
 
             # InputWindow 에서 넘겨 받은 본인(self) 변수를 이용해 UI 요소들에 접근한다.
             # 참고로 이 방식으론 접근해서 읽기만 해야지 쓰기는 하면 안된다.
@@ -385,7 +408,7 @@ class DownloadWorker(QThread):
             self.duration: str = self.info["duration_string"]
             self.chapters = self.info["chapters"]
 
-            self.update_log.emit(f"{self.title} | {self.duration}")
+            self.update_label.emit(f"{self.title} | {self.duration}")
 
             if self.chapters != None:
                 # 영상에 이미 챕터가 존재하는 경우 RangedChapter 에 맞게 변환한다.
@@ -420,7 +443,7 @@ class DownloadWorker(QThread):
 
             self.ext = "mp4"  # 수정 금지!
 
-            self.update_log.emit("최고 품질로 영상을 다운로드 합니다.")
+            self.update_label.emit("최고 품질로 영상을 다운로드 합니다.")
 
             # yt-dlp --limit-rate 3000K -N 10 --fragment-retries 1000 --retry-sleep fragment:linear=1::2 --force-overwrites "https://www.youtube.com/watch?v=UnPyGbP0WhE&t=403s"
 
@@ -440,10 +463,10 @@ class DownloadWorker(QThread):
                 }
             ) as ydl:
                 ydl.download([self.url])
-            self.update_log.emit("다운로드가 완료되었습니다.")
+            self.update_label.emit("다운로드가 완료되었습니다.")
 
             # 각 챕터 시작 시간의 썸네일을 ffmpeg를 이용해 추출한다.
-            self.update_log.emit("썸네일을 추출합니다.")
+            self.update_label.emit("썸네일을 추출합니다.")
 
             # 설정 파일에서 설정값을 가져옴
             self.thumbnail_folder = config.get().thumbnail_folder
@@ -465,21 +488,26 @@ class DownloadWorker(QThread):
             max_workers = multiprocessing.cpu_count() * 2
 
             # multiprocessing.Pool을 사용하여 병렬 처리를 수행합니다.
+
             with concurrent.futures.ThreadPoolExecutor(max_workers) as executor:
                 # map 메서드를 사용하여 함수를 병렬로 실행합니다.
                 # your_function이 your_data_list의 각 아이템에 대해 병렬로 실행됩니다.
                 results = executor.map(self.thumbnail_extractor, parallel_data)
 
+            # 파이썬의 with은 scope를 생성하지 않는다고 함.
+            # with문을 벗어나서도 with안에 있는 results 변수를 사용할 수 있나봄 -.-
             # 작업 결과를 확인합니다.
             for result in results:
+                self.update_label.emit(f"{result[0]} 썸네일 추출 완료")
+                self.update_log.emit(result[1])
                 print(result)
 
             # self.update_input_box.emit(results)
 
-            self.update_log.emit("썸네일 추출이 완료되었습니다.")
+            self.update_label.emit("썸네일 추출이 완료되었습니다.")
 
             # 다운로드 받은 영상에서 무손실 음원 m4a를 추출한다
-            self.update_log.emit("음원을 추출합니다.")
+            self.update_label.emit("음원을 추출합니다.")
             output = run_ffmpeg(
                 [
                     "-y",
@@ -493,7 +521,7 @@ class DownloadWorker(QThread):
             )
 
             # 추출한 음원을 챕터별로 자른다.
-            self.update_log.emit("음원을 챕터별로 자릅니다.")
+            self.update_label.emit("음원을 챕터별로 자릅니다.")
             os.makedirs(self.output_folder, exist_ok=True)
 
             # 병렬 처리
@@ -504,11 +532,12 @@ class DownloadWorker(QThread):
 
             # 작업 결과를 확인합니다.
             for result in results:
-                self.update_log.emit(f"{result[0]}.m4a 추출 완료")
+                self.update_label.emit(f"{result[0]}.m4a 추출 완료")
+                self.update_log.emit(result[1])
                 print(result)
 
             # 챕터별로 자른 음원에 썸네일을 붙인다.
-            self.update_log.emit("썸네일을 적용합니다.")
+            self.update_label.emit("썸네일을 적용합니다.")
 
             # 썸네일 폴더의 모든 파일을 가져온다.
             # thumbnail_files = os.listdir(thumbnail_folder)
@@ -518,18 +547,18 @@ class DownloadWorker(QThread):
             for i, chapter in enumerate(self.chapters):
                 m4a_path = os.path.join(self.output_folder, chapter.title + ".m4a")
                 add_album_art(m4a_path, thumbnail_files[i])
-                self.update_log.emit(f"{chapter.title}.m4a 썸네일 적용 완료")
+                self.update_label.emit(f"{chapter.title}.m4a 썸네일 적용 완료")
 
             # 작업 완료 후 다운로드 받은 영상, 추출한 음원, 썸네일 폴더를 삭제한다.
             # os.remove(f"{title}.{ext}")
             # os.remove(f"{title}.m4a")
             # shutil.rmtree(thumbnail_folder)
 
-            self.update_log.emit("작업이 완료되었습니다.")
+            self.update_label.emit("작업이 완료되었습니다.")
 
         except Exception as e:
             print(e)
-            self.update_log.emit("작업중 오류가 발생했습니다.")
+            self.update_label.emit("작업중 오류가 발생했습니다.")
             self.failed_download.emit()
             return
 

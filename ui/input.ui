@@ -81,22 +81,6 @@
     </hint>
    </hints>
   </connection>
-  <connection>
-   <sender>line_edit_youtube_url</sender>
-   <signal>returnPressed()</signal>
-   <receiver>InputWindow</receiver>
-   <slot>download()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>359</x>
-     <y>22</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>394</x>
-     <y>37</y>
-    </hint>
-   </hints>
-  </connection>
  </connections>
  <slots>
   <slot>download()</slot>
