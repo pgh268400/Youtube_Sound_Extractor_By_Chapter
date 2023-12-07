@@ -524,31 +524,35 @@ class DownloadWorker(QThread):
 
             # multiprocessing.Pool을 사용하여 병렬 처리를 수행합니다.
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers) as executor:
-                # map 메서드를 사용하여 함수를 병렬로 실행합니다.
-                # your_function이 your_data_list의 각 아이템에 대해 병렬로 실행됩니다.
-                results = executor.map(self.thumbnail_extractor, parallel_data)
+            # with concurrent.futures.ThreadPoolExecutor(max_workers) as executor:
+            # map 메서드를 사용하여 함수를 병렬로 실행합니다.
+            # your_function이 your_data_list의 각 아이템에 대해 병렬로 실행됩니다.
+            # results = executor.map(self.thumbnail_extractor, parallel_data)
 
-                # 파이썬의 with은 scope를 생성하지 않는다고 함.
-                # with문을 벗어나서도 with안에 있는 results 변수를 사용할 수 있나봄 -.-
-                # 더불어 if, for , while 도 스코프를 생성하지 않는다고함.
-                # https://stackoverflow.com/questions/45100271/scope-of-variable-within-with-statement
-                # 파이썬은 지역변수 범위는 함수 안에서 결정되는듯 하다.
-                # https://i-never-stop-study.tistory.com/14
-                # 파이썬의 유효범위(scope)는 함수를 통해서 생성됩니다.
-                # https://justmakeyourself.tistory.com/entry/python-scope
-                # 지금까지 잘못 알고 있었구만;;
+            # 파이썬의 with은 scope를 생성하지 않는다고 함.
+            # with문을 벗어나서도 with안에 있는 results 변수를 사용할 수 있나봄 -.-
+            # 더불어 if, for , while 도 스코프를 생성하지 않는다고함.
+            # https://stackoverflow.com/questions/45100271/scope-of-variable-within-with-statement
+            # 파이썬은 지역변수 범위는 함수 안에서 결정되는듯 하다.
+            # https://i-never-stop-study.tistory.com/14
+            # 파이썬의 유효범위(scope)는 함수를 통해서 생성됩니다.
+            # https://justmakeyourself.tistory.com/entry/python-scope
+            # 지금까지 잘못 알고 있었구만;;
 
-                # 작업 결과를 확인합니다.
-                for result in results:
-                    self.update_label.emit(f"{result[0]} 썸네일 추출 완료")
-                    self.update_log.emit(result[1])
+            # 작업 결과를 확인합니다.
+            # for result in results:
+            #     self.update_label.emit(f"{result[0]} 썸네일 추출 완료")
+            #     self.update_log.emit(result[1])
 
             pool = concurrent.futures.ThreadPoolExecutor(max_workers)
             futures = [
                 pool.submit(self.thumbnail_extractor, args) for args in parallel_data
             ]
             wait(futures, return_when=ALL_COMPLETED)
+            results = [future.result() for future in futures]
+            for result in results:
+                self.update_label.emit(f"{result[0]} 썸네일 추출 완료")
+                self.update_log.emit(result[1])
 
             # self.update_input_box.emit(results)
 
@@ -572,24 +576,30 @@ class DownloadWorker(QThread):
             self.update_label.emit("음원을 챕터별로 자릅니다.")
 
             # 병렬 처리
-            with concurrent.futures.ThreadPoolExecutor(max_workers) as executor:
-                # map 메서드를 사용하여 함수를 병렬로 실행합니다.
-                # your_function이 your_data_list의 각 아이템에 대해 병렬로 실행됩니다.
-                results = executor.map(self.cut_audio, self.chapters)
+            pool = concurrent.futures.ThreadPoolExecutor(max_workers)
+            futures = [pool.submit(self.cut_audio, args) for args in self.chapters]
+            wait(futures, return_when=ALL_COMPLETED)
+            results = [future.result() for future in futures]
+            # for result in results:
 
-                # 작업 결과를 확인합니다.
-                for result in results:
-                    self.update_label.emit(f"{result[0]}.m4a 추출 중")
-                    self.update_log.emit(result[1])
-                    print(result)
+            # with concurrent.futures.ThreadPoolExecutor(max_workers) as executor:
+            # map 메서드를 사용하여 함수를 병렬로 실행합니다.
+            # your_function이 your_data_list의 각 아이템에 대해 병렬로 실행됩니다.
+            # results = executor.map(self.cut_audio, self.chapters)
+
+            # 작업 결과를 확인합니다.
+            for result in results:
+                self.update_label.emit(f"{result[0]}.m4a 추출 중")
+                self.update_log.emit(result[1])
+                print(result)
 
             # 챕터별로 자른 음원에 썸네일을 붙인다.
             self.update_label.emit("썸네일을 적용합니다.")
 
             # 썸네일 폴더의 모든 파일을 가져온다.
-            # thumbnail_files = os.listdir(thumbnail_folder)
-            thumbnail_files = glob.glob(os.path.join(self.thumbnail_folder, "*.png"))
-            thumbnail_files = natsorted(thumbnail_files)
+            thumbnail_files = []
+            for file in os.listdir(self.thumbnail_folder):
+                thumbnail_files.append(os.path.join(self.thumbnail_folder, file))
 
             for i, chapter in enumerate(self.chapters):
                 m4a_path = os.path.join(self.output_folder, chapter.title + ".m4a")
