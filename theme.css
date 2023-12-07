@@ -10,3 +10,11 @@
   https://doc.qt.io/qt-5/stylesheet-examples.html#customizing-qpushbutton
   
   --------------------------------------------------------------------------- */
+
+QTextEdit {
+  background-color: white;
+}
+
+QLineEdit {
+  background-color: white;
+}

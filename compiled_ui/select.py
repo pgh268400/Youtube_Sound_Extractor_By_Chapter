@@ -23,6 +23,7 @@ class Ui_SelectWindow(object):
         if not SelectWindow.objectName():
             SelectWindow.setObjectName(u"SelectWindow")
         SelectWindow.resize(383, 262)
+        SelectWindow.setStyleSheet(u"")
         self.centralwidget = QWidget(SelectWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self.btn_auto_convert = QPushButton(self.centralwidget)

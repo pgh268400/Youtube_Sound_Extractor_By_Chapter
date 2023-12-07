@@ -1,9 +1,10 @@
 import multiprocessing
 from typing import Final, Optional
-from module.ui_compiler import compile_ui_to_py
+from module.ui_compiler import compile_ui_to_py, compile_ui_to_py_multi
 import sys
 from PySide6.QtCore import *
 from PySide6.QtWidgets import *
+from PySide6.QtGui import *
 import os
 import glob
 from pprint import pprint
@@ -27,11 +28,7 @@ import concurrent.futures
 ui_path = "./ui"
 compiled_ui_path = "./compiled_ui"
 ui_files = ['select.ui', 'input.ui', 'auto.ui']
-
-for ui_file in ui_files:
-    input_path = os.path.join(ui_path, ui_file)
-    output_path = os.path.join(compiled_ui_path, f'{os.path.splitext(ui_file)[0]}.py')
-    compile_ui_to_py(input_path, output_path)
+compile_ui_to_py_multi(ui_path, compiled_ui_path, ui_files)
 
 from compiled_ui.select import Ui_SelectWindow
 from compiled_ui.input import Ui_InputWindow
@@ -39,7 +36,9 @@ from compiled_ui.auto import Ui_AutoWindow
 # fmt: on
 
 # 전역 변수
-TITLE: Final[str] = "Youtube Chapter Converter"
+title: Final[str] = "Youtube Chapter Converter"
+theme_path: Final[str] = "theme.css"
+icon_path: Final[str] = "./icon/icon.png"
 
 
 # 설정 파일 객체는 싱글톤으로 전역으로 사용한다.
@@ -53,7 +52,8 @@ class AutoWindow(QMainWindow, Ui_AutoWindow):
         self.setupUi(self)
 
         # 제목 설정
-        self.setWindowTitle(TITLE)
+        self.setWindowTitle(title)
+        self.setWindowIcon(QIcon(icon_path))
 
     def edit_log(self, log: str) -> None:
         self.textedit_log.setText(log)
@@ -66,7 +66,8 @@ class MainWindow(QMainWindow, Ui_SelectWindow):
         self.setupUi(self)
 
         # 제목 설정
-        self.setWindowTitle(TITLE)
+        self.setWindowTitle(title)
+        self.setWindowIcon(QIcon(icon_path))
 
         # InputWindow 창 객체
         self.input_window: Optional[InputWindow] = None
@@ -118,7 +119,8 @@ class InputWindow(QMainWindow, Ui_InputWindow):
         self.setupUi(self)
 
         # 제목 설정
-        self.setWindowTitle(TITLE)
+        self.setWindowTitle(title)
+        self.setWindowIcon(QIcon(icon_path))
 
         # 챕터 입력 상황 체크 변수
         self.need_chapter_input = False
@@ -529,7 +531,6 @@ class DownloadWorker(QThread):
                     self.update_label.emit(f"{result[0]} 썸네일 추출 완료")
                     self.update_log.emit(result[1])
 
-
             # self.update_input_box.emit(results)
 
             self.update_label.emit("썸네일 추출이 완료되었습니다.")
@@ -591,9 +592,17 @@ class DownloadWorker(QThread):
             return
 
 
+from qt_material import apply_stylesheet
+
 # 메인 윈도우 실행
 app = QApplication(sys.argv)
-app.setStyleSheet(open("theme.css", encoding="utf-8").read())
+
+import qtmodern.styles
+import qtmodern.windows
+
+qtmodern.styles.light(app)
+
+app.setStyleSheet(open(theme_path, encoding="utf-8").read())
 
 window = MainWindow()
 window.show()

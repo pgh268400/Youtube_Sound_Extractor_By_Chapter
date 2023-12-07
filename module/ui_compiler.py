@@ -28,3 +28,12 @@ def compile_ui_to_py(ui_dir: str, ui_to_py_dir: str) -> None:
 
         # ui 파일을 py파일로 컴파일한다.
         result = os.popen(f"pyside6-uic {ui_dir} -o {ui_to_py_dir}").read()
+
+
+def compile_ui_to_py_multi(ui_path: str, compiled_ui_path: str, ui_files: list[str]):
+    for ui_file in ui_files:
+        ui_dir = os.path.join(ui_path, ui_file)
+        ui_to_py_dir = os.path.join(
+            compiled_ui_path, f"{os.path.splitext(ui_file)[0]}.py"
+        )
+        compile_ui_to_py(ui_dir, ui_to_py_dir)
