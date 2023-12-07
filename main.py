@@ -101,6 +101,10 @@ class MainWindow(QMainWindow, Ui_SelectWindow):
         if self.input_window:
             self.input_window.close()
 
+        # 쓰레드도 강제 종료한다.
+        if self.worker:
+            self.worker.terminate()
+
         # 본인도 종료한다.
         event.accept()
 
@@ -427,17 +431,26 @@ class DownloadWorker(QThread):
             self.total_offset = config.get().total_offset
             self.download_folder = config.get().download_folder
 
-            self.ext = "mp4"  # 수정 금지!
+            self.video_ext = "mp4"  # 수정 금지!
 
             # 비디오 파일 완전 경로
             self.video_full_path = os.path.join(
-                self.download_folder, f"{self.title}.{self.ext}"
+                self.download_folder, self.title, f"{self.title}.{self.video_ext}"
             )
 
             # 음성 파일 완전 경로
             self.audio_full_path = os.path.join(
-                self.download_folder, f"{self.title}.m4a"
+                self.download_folder, self.title, f"{self.title}.m4a"
             )
+
+            # 출력 경로에 title 얹기
+            self.output_folder = os.path.join(self.output_folder, self.title)
+            self.thumbnail_folder = os.path.join(self.thumbnail_folder, self.title)
+
+            # 폴더 생성
+            os.makedirs(self.thumbnail_folder, exist_ok=True)
+            os.makedirs(self.output_folder, exist_ok=True)
+            os.makedirs(self.download_folder, exist_ok=True)
 
             self.update_label.emit(f"{self.title} | {self.duration}")
 
@@ -476,8 +489,8 @@ class DownloadWorker(QThread):
             with yt_dlp.YoutubeDL(
                 {
                     # 최고 품질 영상 mp4 & 최고 음질 m4a 로 받으나, 영상의 경우 FHD 이하로 제한한다.
-                    "format": f"bestvideo[height<=1080][ext={self.ext}]+bestaudio[ext=m4a]/best[ext={self.ext}]/best",
-                    "merge_output_format": self.ext,
+                    "format": f"bestvideo[height<=1080][ext={self.video_ext}]+bestaudio[ext=m4a]/best[ext={self.video_ext}]/best",
+                    "merge_output_format": self.video_ext,
                     # "outtmpl": {"default": "%(title)s.%(ext)s"},  # 제목.확장자 형식으로 저장
                     "outtmpl": {"default": self.video_full_path},
                     "throttledratelimit": 102400,
@@ -493,9 +506,6 @@ class DownloadWorker(QThread):
 
             # 각 챕터 시작 시간의 썸네일을 ffmpeg를 이용해 추출한다.
             self.update_label.emit("썸네일을 추출합니다.")
-
-            # 썸네일 저장용 폴더 생성
-            os.makedirs(self.thumbnail_folder, exist_ok=True)
 
             # 병렬 처리에 필요한 데이터 생성
             parallel_data: list[tuple[int, RangedChapter]] = []
@@ -524,8 +534,6 @@ class DownloadWorker(QThread):
                 # https://justmakeyourself.tistory.com/entry/python-scope
                 # 지금까지 잘못 알고 있었구만;;
 
-                # 일단 아래 코드는 스코프 문제가 아니여도 with 밖으로 빼면 안되는듯.
-                # 그러면 executor가 close 되서 실시간으로 결과를 받을 수 없나봄.
                 # 작업 결과를 확인합니다.
                 for result in results:
                     self.update_label.emit(f"{result[0]} 썸네일 추출 완료")
@@ -551,7 +559,6 @@ class DownloadWorker(QThread):
 
             # 추출한 음원을 챕터별로 자른다.
             self.update_label.emit("음원을 챕터별로 자릅니다.")
-            os.makedirs(self.output_folder, exist_ok=True)
 
             # 병렬 처리
             with concurrent.futures.ThreadPoolExecutor(max_workers) as executor:
@@ -561,7 +568,7 @@ class DownloadWorker(QThread):
 
                 # 작업 결과를 확인합니다.
                 for result in results:
-                    self.update_label.emit(f"{result[0]}.m4a 추출 완료")
+                    self.update_label.emit(f"{result[0]}.m4a 추출 중")
                     self.update_log.emit(result[1])
                     print(result)
 

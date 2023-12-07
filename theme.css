@@ -18,3 +18,7 @@ QTextEdit {
 QLineEdit {
   background-color: white;
 }
+
+QTableView {
+  background-color: white;
+}
