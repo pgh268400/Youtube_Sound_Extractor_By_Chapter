@@ -8,12 +8,14 @@ from PySide6.QtGui import *
 import os
 import glob
 from pprint import pprint
+from concurrent.futures import wait, ALL_COMPLETED
 import sys
 import yt_dlp
 from module.config import Config
 from module.module import (
     add_album_art,
     convert_base_to_ranged_chapter,
+    escape_ansi_color_pattern,
     filename_remover,
     get_youtube_info,
     make_base_chapter,
@@ -220,10 +222,13 @@ class InputWindow(QMainWindow, Ui_InputWindow):
         self.label_status.setText(f"Status : {log}")
 
     # 다운로드 실패시
-    @Slot()
-    def failed_download(self) -> None:
+    @Slot(str)
+    def failed_download(self, err) -> None:
         self.btn_ok.setEnabled(True)
         self.backup_origin()
+
+        # 오류 메세지 박스 출력
+        QMessageBox.critical(self, "오류", err)
 
     # 영상에 이미 챕터가 존재하는 경우
     @Slot()
@@ -279,7 +284,7 @@ class DownloadWorker(QThread):
     update_log = Signal(str)  # 로그 창 업데이트 (로그 창 안열려 있으면 자동으로 열리고 로그 출력됨)
     update_input_box = Signal(str)  # 챕터 입력 박스 업데이트
     chapter_enabled = Signal()  # 챕터 입력 상황이 됨
-    failed_download = Signal()  # 다운로드 실패시
+    failed_download = Signal(str)  # 다운로드 실패시
     already_exist_chapter = Signal()  # 영상에 이미 챕터가 존재하는 경우 유저 입력 메세지 박스 요청
     update_progress_bar = Signal(int)  # 프로그레스 바 업데이트
 
@@ -539,6 +544,12 @@ class DownloadWorker(QThread):
                     self.update_label.emit(f"{result[0]} 썸네일 추출 완료")
                     self.update_log.emit(result[1])
 
+            pool = concurrent.futures.ThreadPoolExecutor(max_workers)
+            futures = [
+                pool.submit(self.thumbnail_extractor, args) for args in parallel_data
+            ]
+            wait(futures, return_when=ALL_COMPLETED)
+
             # self.update_input_box.emit(results)
 
             self.update_label.emit("썸네일 추출이 완료되었습니다.")
@@ -595,7 +606,7 @@ class DownloadWorker(QThread):
         except Exception as e:
             print(e)
             self.update_label.emit("작업중 오류가 발생했습니다.")
-            self.failed_download.emit()
+            self.failed_download.emit(escape_ansi_color_pattern(str(e)))
             return
 
 
