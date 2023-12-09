@@ -7,6 +7,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import *
 import os
 import glob
+import threading
 from pprint import pprint
 from concurrent.futures import wait, ALL_COMPLETED
 import sys
@@ -412,6 +413,48 @@ class DownloadWorker(QThread):
         )
         return (chapters.title, output)
 
+    # 다른 쓰레드에서 실행될 함수
+    def extract_thumbnail_thread(self, qthread: "DownloadWorker", result: list) -> None:
+        print("썸네일 추출 쓰레드 시작")
+        # result 에 결과를 받을 리스트를 넘긴다.
+        # 파이썬에서 리스트를 인자로 넘기면 참조로 넘어가서 함수 내부에서 리스트를 수정하면
+        # 함수 외부에서도 리스트가 수정된다.
+        # 마치 C언어의 call by ref 같은 개념
+
+        # 병렬 처리에 필요한 데이터 생성
+        parallel_data: list[tuple[int, RangedChapter]] = []
+        for i, chapter in enumerate(self.chapters):
+            parallel_data.append((i, chapter))
+
+        max_workers = multiprocessing.cpu_count() * 2
+
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers)
+        futures = [
+            pool.submit(self.thumbnail_extractor, args) for args in parallel_data
+        ]
+        wait(futures, return_when=ALL_COMPLETED)
+
+        for future in futures:
+            result.append(future.result())
+
+        qthread.resume()
+
+    # 다른 쓰레드에서 실행될 함수 (챕터 별로 자르기)
+    def cut_audio_thread(self, qthread: "DownloadWorker", result: list):
+        # 병렬 처리에 필요한 데이터 생성
+        parallel_data: list[RangedChapter] = self.chapters
+
+        max_workers = multiprocessing.cpu_count() * 2
+
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers)
+        futures = [pool.submit(self.cut_audio, args) for args in parallel_data]
+        wait(futures, return_when=ALL_COMPLETED)
+
+        for future in futures:
+            result.append(future.result())
+
+        qthread.resume()
+
     def run(self) -> None:
         try:
             self.update_label.emit("유튜브 영상 정보를 가져오는 중...")
@@ -512,16 +555,6 @@ class DownloadWorker(QThread):
             # 각 챕터 시작 시간의 썸네일을 ffmpeg를 이용해 추출한다.
             self.update_label.emit("썸네일을 추출합니다.")
 
-            # 병렬 처리에 필요한 데이터 생성
-            parallel_data: list[tuple[int, RangedChapter]] = []
-            for i, chapter in enumerate(self.chapters):
-                parallel_data.append((i, chapter))
-
-            # 동시에 실행될 최대 프로세스 수를 정의합니다.
-            # 이 숫자를 조절하여 동시에 실행되는 프로세스 수를 제한할 수 있습니다.
-            # 여기선 cpu 코어 수 * 2 로 설정
-            max_workers = multiprocessing.cpu_count() * 2
-
             # multiprocessing.Pool을 사용하여 병렬 처리를 수행합니다.
 
             # with concurrent.futures.ThreadPoolExecutor(max_workers) as executor:
@@ -544,12 +577,19 @@ class DownloadWorker(QThread):
             #     self.update_label.emit(f"{result[0]} 썸네일 추출 완료")
             #     self.update_log.emit(result[1])
 
-            pool = concurrent.futures.ThreadPoolExecutor(max_workers)
-            futures = [
-                pool.submit(self.thumbnail_extractor, args) for args in parallel_data
-            ]
-            wait(futures, return_when=ALL_COMPLETED)
-            results = [future.result() for future in futures]
+            # 동시에 실행될 최대 프로세스 수를 정의합니다.
+            # 이 숫자를 조절하여 동시에 실행되는 프로세스 수를 제한할 수 있습니다.
+            # 여기선 cpu 코어 수 * 2 로 설정
+
+            # 쓰레드를 호출하여 작업 실행, QTHREAD 내부에서 바로 ThreadPoolExecutor를 돌리니깐 코드가 멈춰버림.
+            # 따라서 QThread 안에서 쓰레드를 하나 더 만들어서 작업을 수행하도록 함.
+            results = []
+            t = threading.Thread(
+                target=self.extract_thumbnail_thread, args=(self, results)
+            )
+            t.start()
+            self.pause()
+
             for result in results:
                 self.update_label.emit(f"{result[0]} 썸네일 추출 완료")
                 self.update_log.emit(result[1])
@@ -575,17 +615,11 @@ class DownloadWorker(QThread):
             # 추출한 음원을 챕터별로 자른다.
             self.update_label.emit("음원을 챕터별로 자릅니다.")
 
-            # 병렬 처리
-            pool = concurrent.futures.ThreadPoolExecutor(max_workers)
-            futures = [pool.submit(self.cut_audio, args) for args in self.chapters]
-            wait(futures, return_when=ALL_COMPLETED)
-            results = [future.result() for future in futures]
-            # for result in results:
-
-            # with concurrent.futures.ThreadPoolExecutor(max_workers) as executor:
-            # map 메서드를 사용하여 함수를 병렬로 실행합니다.
-            # your_function이 your_data_list의 각 아이템에 대해 병렬로 실행됩니다.
-            # results = executor.map(self.cut_audio, self.chapters)
+            # 쓰레드 실행
+            results = []
+            t = threading.Thread(target=self.cut_audio_thread, args=(self, results))
+            t.start()
+            self.pause()
 
             # 작업 결과를 확인합니다.
             for result in results:
@@ -600,6 +634,9 @@ class DownloadWorker(QThread):
             thumbnail_files = []
             for file in os.listdir(self.thumbnail_folder):
                 thumbnail_files.append(os.path.join(self.thumbnail_folder, file))
+
+            # 썸네일 파일을 정렬한다.
+            thumbnail_files = natsorted(thumbnail_files)
 
             for i, chapter in enumerate(self.chapters):
                 m4a_path = os.path.join(self.output_folder, chapter.title + ".m4a")
