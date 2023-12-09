@@ -10,3 +10,4 @@ output/
 test.py
 *.jpg
 *.png
+*.part
