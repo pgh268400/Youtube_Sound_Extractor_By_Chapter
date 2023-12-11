@@ -19,7 +19,7 @@ from module.module import *
 from window.auto import LogWindow
 
 
-class InputWindow(QMainWindow, Ui_InputWindow):
+class ManualWindow(QMainWindow, Ui_InputWindow):
     def __init__(self) -> None:
         # 기본 설정 코드
         super().__init__()
@@ -193,7 +193,7 @@ class DownloadWorker(QThread):
     already_exist_chapter = Signal()  # 영상에 이미 챕터가 존재하는 경우 유저 입력 메세지 박스 요청
     update_progress_bar = Signal(int)  # 프로그레스 바 업데이트
 
-    def __init__(self, parent: InputWindow) -> None:
+    def __init__(self, parent: ManualWindow) -> None:
         # 부모 생성자 호출
         super().__init__()
 

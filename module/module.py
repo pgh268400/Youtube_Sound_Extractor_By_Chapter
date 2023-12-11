@@ -1,11 +1,7 @@
-from datetime import datetime, timedelta
+import os
 import re
-import subprocess
-import mutagen
-import requests
-from type.type import BaseChapter, RangedChapter
-from mutagen.mp4 import MP4
-from yt_dlp import YoutubeDL
+import sys
+from PySide6.QtWidgets import QMainWindow
 
 """
 터미널 컬러 텍스트 일반 텍스트로 변경
@@ -37,7 +33,10 @@ def escape_ansi_color_pattern(ansi_text: str) -> str:
     return result
 
 
-# if __name__ == "__main__":
-#     print(convert_to_seconds("1:30:00"))
-#     print(convert_to_seconds("30:00"))
-#     print(convert_to_seconds("30"))
+def resource_path(relative_path: str) -> str:
+    try:
+        # PyInstaller에 의해 임시폴더에서 실행될 경우 임시폴더로 접근하는 함수
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)

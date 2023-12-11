@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'auto.ui'
+## Form generated from reading UI file 'log.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.6.0
 ##
@@ -18,25 +18,25 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
 from PySide6.QtWidgets import (QApplication, QMainWindow, QSizePolicy, QTextEdit,
     QWidget)
 
-class Ui_AutoWindow(object):
-    def setupUi(self, AutoWindow):
-        if not AutoWindow.objectName():
-            AutoWindow.setObjectName(u"AutoWindow")
-        AutoWindow.resize(525, 408)
-        self.centralwidget = QWidget(AutoWindow)
+class Ui_LogWindow(object):
+    def setupUi(self, LogWindow):
+        if not LogWindow.objectName():
+            LogWindow.setObjectName(u"LogWindow")
+        LogWindow.resize(525, 408)
+        self.centralwidget = QWidget(LogWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self.textedit_log = QTextEdit(self.centralwidget)
         self.textedit_log.setObjectName(u"textedit_log")
         self.textedit_log.setGeometry(QRect(20, 20, 481, 361))
         self.textedit_log.setReadOnly(True)
-        AutoWindow.setCentralWidget(self.centralwidget)
+        LogWindow.setCentralWidget(self.centralwidget)
 
-        self.retranslateUi(AutoWindow)
+        self.retranslateUi(LogWindow)
 
-        QMetaObject.connectSlotsByName(AutoWindow)
+        QMetaObject.connectSlotsByName(LogWindow)
     # setupUi
 
-    def retranslateUi(self, AutoWindow):
-        AutoWindow.setWindowTitle(QCoreApplication.translate("AutoWindow", u"MainWindow", None))
+    def retranslateUi(self, LogWindow):
+        LogWindow.setWindowTitle(QCoreApplication.translate("LogWindow", u"MainWindow", None))
     # retranslateUi
 

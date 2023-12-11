@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>551</width>
+    <height>271</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true"/>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QPushButton" name="btn_auto">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>20</y>
+      <width>251</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">*{
+border-bottom-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(0, 0, 0, 255), stop:1 rgba(255, 255, 255, 255));
+}</string>
+    </property>
+    <property name="text">
+     <string>자동 변환</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_manual">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>80</y>
+      <width>251</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>수동 변환</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_download">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>140</y>
+      <width>251</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>영상 다운로드</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_apply_thumb">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>200</y>
+      <width>251</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>썸네일 적용</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_open_thumb">
+    <property name="geometry">
+     <rect>
+      <x>280</x>
+      <y>140</y>
+      <width>251</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">*{
+border-bottom-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(0, 0, 0, 255), stop:1 rgba(255, 255, 255, 255));
+}</string>
+    </property>
+    <property name="text">
+     <string>썸네일 폴더 열기</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_open_output">
+    <property name="geometry">
+     <rect>
+      <x>280</x>
+      <y>20</y>
+      <width>251</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">*{
+border-bottom-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(0, 0, 0, 255), stop:1 rgba(255, 255, 255, 255));
+}</string>
+    </property>
+    <property name="text">
+     <string>출력 폴더 열기</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_open_source">
+    <property name="geometry">
+     <rect>
+      <x>280</x>
+      <y>80</y>
+      <width>251</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">*{
+border-bottom-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(0, 0, 0, 255), stop:1 rgba(255, 255, 255, 255));
+}</string>
+    </property>
+    <property name="text">
+     <string>영상 + 음원 폴더 열기</string>
+    </property>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>btn_auto</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>auto_convert()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>270</x>
+     <y>34</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>374</x>
+     <y>43</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btn_manual</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>manual_convert()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>270</x>
+     <y>89</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>379</x>
+     <y>95</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btn_download</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>download_video()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>270</x>
+     <y>155</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>375</x>
+     <y>156</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btn_apply_thumb</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>apply_thumbnail()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>270</x>
+     <y>211</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>374</x>
+     <y>221</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btn_open_output</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>open_output()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>485</x>
+     <y>49</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>551</x>
+     <y>46</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btn_open_source</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>open_source()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>507</x>
+     <y>88</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>550</x>
+     <y>96</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>btn_open_thumb</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>open_thumb()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>511</x>
+     <y>163</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>549</x>
+     <y>170</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>auto_convert()</slot>
+  <slot>manual_convert()</slot>
+  <slot>download_video()</slot>
+  <slot>apply_thumbnail()</slot>
+  <slot>open_output()</slot>
+  <slot>open_source()</slot>
+  <slot>open_thumb()</slot>
+ </slots>
+</ui>
